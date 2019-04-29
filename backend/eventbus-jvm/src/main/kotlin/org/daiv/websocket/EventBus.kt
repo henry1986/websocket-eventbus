@@ -9,8 +9,8 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import mu.KLogging
 
 fun EBMessageHeader.parse(): Message<out Any, out Any> {
-    EventBusReceiver.logger.debug { "parse: $this" }
-    println(body)
+    EventBusReceiver.logger.trace { "parse: $this" }
+    EventBusReceiver.logger.trace { body }
     val headerClazz = Class.forName(header)
     val bodyClazz = Class.forName(body)
     val x = Gson().fromJson(json, JsonObject::class.java)
