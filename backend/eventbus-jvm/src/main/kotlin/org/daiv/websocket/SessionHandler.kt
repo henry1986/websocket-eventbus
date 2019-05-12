@@ -42,8 +42,10 @@ class ControlledChannelImpl(private val sendChannel: SendChannel<Frame>, overrid
         GlobalScope.launch {
             try {
                 val eb = toJSON(event)
-                logger.debug { "send to Frontend: $event" }
-                sendChannel.send(Frame.Text(eb.serialize()))
+                logger.trace { "event send to Frontend: $event" }
+                val string = eb.serialize()
+                logger.debug { "string send to Frontend: $string" }
+                sendChannel.send(Frame.Text(string))
             } catch (t: Throwable) {
                 logger.error(t) { "error at sending $event" }
             }
