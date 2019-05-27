@@ -40,8 +40,8 @@ fun <T : Any> EBMessageHeader.toObject(serializer: KSerializer<T>): T {
     return toMessage(serializer).e
 }
 
-class Translater<T : Any>(val serializer: KSerializer<T>, val fct: (T, EBWebsocket) -> Unit) {
-    constructor(serializer: KSerializer<T>, fct: (T) -> Unit) : this(serializer, { it, eb -> fct(it) })
+class Translater<T : Any> internal constructor(val serializer: KSerializer<T>, val fct: (T, EBWebsocket) -> Unit) {
+    constructor(serializer: KSerializer<T>, fct: (T) -> Unit) : this(serializer, { it, _ -> fct(it) })
 
     fun call(ebWebsocket: EBWebsocket, messageHeader: EBMessageHeader, func: (FrontendMessageHeader) -> Unit): Boolean {
         val name = toName(serializer)
@@ -55,6 +55,8 @@ class Translater<T : Any>(val serializer: KSerializer<T>, val fct: (T, EBWebsock
         return false
     }
 }
+
+fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) = Translater(serializer, fct)
 
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.trace { "protocol: ${window.location.protocol}" }
