@@ -18,9 +18,9 @@ fun <HEADER : Any, BODY : Any> toMessage(
     return JSON.nonstrict.stringify(s, e)
 }
 
-val logger = KotlinLogging.logger {}
+val logger = KotlinLogging.logger ("org.daiv.websocket.eventbus")
 inline fun <reified T : Any> toJSON(serializer: KSerializer<T>, event: T): EBMessageHeader {
-    logger.trace { event }
+    logger.debug { event }
     return EBMessageHeader(
         FrontendMessageHeader.serializer().descriptor.name, serializer.descriptor.name,
         toMessage(
@@ -59,15 +59,15 @@ class Translater<T : Any> internal constructor(val serializer: KSerializer<T>, v
 fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) = Translater(serializer, fct)
 
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
-    logger.trace { "protocol: ${window.location.protocol}" }
+    logger.debug { "protocol: ${window.location.protocol}" }
     val protocol = if (window.location.protocol == "http:" || window.location.protocol == "file:") "ws" else "wss"
-    logger.trace { "ws protocol: $protocol" }
-    logger.trace { "window location host: ${window.location.host}" }
+    logger.debug { "ws protocol: $protocol" }
+    logger.debug { "window location host: ${window.location.host}" }
     val host = if (window.location.host == "") onHostEmptyUrl else window.location.host
 
-    logger.trace { "host: $host" }
+    logger.debug { "host: $host" }
     val uri = "$protocol://$host/ws"
-    logger.trace { "uri: $uri" }
+    logger.debug { "uri: $uri" }
     val ws = WebSocket(uri)
 
     logger.trace { "ws: $ws" }
@@ -80,7 +80,7 @@ class EBWebsocket(
     private val onHeader: (FrontendMessageHeader) -> Unit = {}
 ) {
     companion object {
-        val logger = KotlinLogging.logger { }
+        val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
     }
 
     var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
@@ -116,12 +116,12 @@ class EBWebsocket(
 
     private fun parse(event: MessageEvent) {
         val string = event.data.toString()
-        logger.trace { "received $string" }
+        logger.debug { "received $string" }
         val parse1 = EBMessageHeader.parse(string)
         logger.trace { "message: $parse1" }
         val exec = run(parse1)
         if (!exec) {
-            logger.trace { "received unhandled message: $parse1" }
+            logger.warn { "received unhandled message: $parse1" }
         }
     }
 }

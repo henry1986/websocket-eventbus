@@ -1,6 +1,5 @@
 package org.daiv.websocket
 
-import com.ea.cos.frontend.SessionHandler
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import io.ktor.http.cio.websocket.Frame

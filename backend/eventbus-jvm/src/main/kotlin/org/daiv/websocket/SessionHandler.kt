@@ -1,4 +1,4 @@
-package com.ea.cos.frontend
+package org.daiv.websocket
 
 import io.ktor.http.cio.websocket.Frame
 import kotlinx.coroutines.GlobalScope
@@ -9,11 +9,6 @@ import org.daiv.util.DefaultRegisterer
 import org.daiv.util.Registerer
 import org.daiv.websocket.*
 
-
-interface ControlledChannel {
-    val farmName: String
-    fun toWSEnd(event: Message<Any, Any>)
-}
 
 class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
         Registerer<ControlledChannel> by registerer, ControlledChannel {
