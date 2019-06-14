@@ -18,9 +18,8 @@ fun <HEADER : Any, BODY : Any> toMessage(
     return JSON.nonstrict.stringify(s, e)
 }
 
-val logger = KotlinLogging.logger ("org.daiv.websocket.eventbus")
+private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 inline fun <reified T : Any> toJSON(serializer: KSerializer<T>, event: T): EBMessageHeader {
-    logger.debug { event }
     return EBMessageHeader(
         FrontendMessageHeader.serializer().descriptor.name, serializer.descriptor.name,
         toMessage(
@@ -80,7 +79,7 @@ class EBWebsocket(
     private val onHeader: (FrontendMessageHeader) -> Unit = {}
 ) {
     companion object {
-        val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
+        private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
     }
 
     var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
@@ -106,6 +105,7 @@ class EBWebsocket(
     }
 
     fun send(messageHeader: EBMessageHeader) {
+        logger.trace { "send messageHeader: $messageHeader" }
         ws.send(messageHeader.serialize())
     }
 
