@@ -1,5 +1,7 @@
 package org.daiv.websocket
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JSON
 import mu.KotlinLogging
@@ -50,21 +52,25 @@ fun <T : Any> EBMessageHeader.toObject(serializer: KSerializer<T>): T {
 
 class Translater<T : Any> internal constructor(
     val serializer: KSerializer<T>,
-    val fct: (T, FrontendMessageHeader, EBWebsocket) -> Unit
+    val fct: suspend (T, FrontendMessageHeader, EBWebsocket) -> Unit
 ) {
-    constructor(serializer: KSerializer<T>, fct: (T) -> Unit) : this(serializer, { it, _, _ -> fct(it) })
-    constructor(serializer: KSerializer<T>, fct: (T, FrontendMessageHeader) -> Unit) : this(
+    constructor(serializer: KSerializer<T>, fct: suspend (T) -> Unit) : this(serializer, { it, _, _ -> fct(it) })
+    constructor(serializer: KSerializer<T>, fct: suspend (T, FrontendMessageHeader) -> Unit) : this(
         serializer,
         { it, f, _ -> fct(it, f) })
 
-    constructor(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) : this(
+    constructor(serializer: KSerializer<T>, fct: suspend (T, EBWebsocket) -> Unit) : this(
         serializer,
         { it, _, e -> fct(it, e) })
 
     val name
         get() = serializer.descriptor.name
 
-    fun call(ebWebsocket: EBWebsocket, messageHeader: EBMessageHeader, func: (FrontendMessageHeader) -> Unit): Boolean {
+    suspend fun call(
+        ebWebsocket: EBWebsocket,
+        messageHeader: EBMessageHeader,
+        func: (FrontendMessageHeader) -> Unit
+    ): Boolean {
         if (messageHeader.body == name) {
             logger.trace { "hit on $name" }
             val message = messageHeader.toMessage(serializer)
@@ -76,7 +82,7 @@ class Translater<T : Any> internal constructor(
     }
 }
 
-fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) =
+fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: suspend (T, EBWebsocket) -> Unit) =
     Translater(serializer, fct)
 
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
@@ -110,7 +116,7 @@ class EBWebsocket(
     var onerror: (Event) -> Unit = {}
 
     init {
-        ws.onmessage = { parse(it) }
+        ws.onmessage = { GlobalScope.launch { parse(it) } }
         ws.onclose = {
             it as CloseEvent
             logger.info { "ws: $ws was closed -> reason: ${it.reason}, code: ${it.code}" }
@@ -134,13 +140,13 @@ class EBWebsocket(
         ws.send(messageHeader.serialize())
     }
 
-    fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: (T) -> Unit) {
+    fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: suspend (T) -> Unit) {
         send(messageHeader, Translater(serializer, func) as Translater<out WSEvent>)
     }
 
     private fun isResponse(messageHeader: EBMessageHeader) = responseTranslaters.any { it.name == messageHeader.body }
 
-    private fun run(messageHeader: EBMessageHeader): Boolean {
+    private suspend fun run(messageHeader: EBMessageHeader): Boolean {
         return if (isResponse(messageHeader)) {
             val response = responseTranslaters.find { it.call(this, messageHeader, onHeader) }!!
             responseTranslaters.remove(response)
@@ -151,7 +157,7 @@ class EBWebsocket(
         }
     }
 
-    private fun parse(event: MessageEvent) {
+    private suspend fun parse(event: MessageEvent) {
         val string = event.data.toString()
         logger.debug { "received $string" }
         val parse1 = EBMessageHeader.parse(string)
