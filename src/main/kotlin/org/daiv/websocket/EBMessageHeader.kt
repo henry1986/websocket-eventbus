@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JSON
 interface WSEvent
 
 @Serializable
-data class FrontendMessageHeader constructor(val farmName: String, val isRemote: Boolean)
+data class FrontendMessageHeader constructor(val farmName: String, val isRemote: Boolean, val messageId:String)
 
 @Serializable
 data class ForwardedMessage constructor(val id:String, val farmName:String)
