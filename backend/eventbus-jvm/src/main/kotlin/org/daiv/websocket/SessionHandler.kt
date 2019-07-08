@@ -8,10 +8,11 @@ import mu.KLogging
 import org.daiv.util.DefaultRegisterer
 import org.daiv.util.Registerer
 import org.daiv.websocket.*
+import java.util.*
 
 
 class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
-        Registerer<ControlledChannel> by registerer, ControlledChannel {
+    Registerer<ControlledChannel> by registerer, ControlledChannel {
     override val farmName: String
         get() = registerer.firstOrNull()?.farmName ?: "there is no known farm, as there is no channel registered"
 
@@ -23,13 +24,13 @@ class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChan
 }
 
 class ControlledChannelAdapter(val controlledChannel: ControlledChannel, private val messageHeader: ForwardedMessage) :
-        ControlledChannel {
+    ControlledChannel {
     override val farmName = messageHeader.farmName
     override fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(Message(messageHeader, event.e))
 }
 
 class ControlledChannelImpl(private val sendChannel: SendChannel<Frame>, override val farmName: String) :
-        ControlledChannel {
+    ControlledChannel {
     companion object : KLogging()
 
 
@@ -48,6 +49,11 @@ class ControlledChannelImpl(private val sendChannel: SendChannel<Frame>, overrid
     }
 }
 
+fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
+    val header = it.messageHeader
+    header as FrontendMessageHeader
+    "response-${header.messageId}"
+} ?: "${event::class.simpleName}-${Date()}"
 
 interface SessionHandler {
     val controlledChannel: ControlledChannel
@@ -69,10 +75,11 @@ interface SessionHandler {
         toWSEnd(Message(frontendMessageHeader, event))
     }
 
-    fun toFrontend(event: WSEvent) {
-        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false), event)
+
+    fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
+        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
     }
 
-    fun toFrontendFromRemote(remoteName: String, event: WSEvent) = toFrontend(
-            FrontendMessageHeader(remoteName, true), event)
+    fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
+        toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
 }

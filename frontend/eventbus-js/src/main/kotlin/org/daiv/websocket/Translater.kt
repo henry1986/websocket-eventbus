@@ -8,6 +8,7 @@ import org.w3c.dom.MessageEvent
 import org.w3c.dom.WebSocket
 import org.w3c.dom.events.Event
 import kotlin.browser.window
+import kotlin.js.Date
 
 fun <HEADER : Any, BODY : Any> toMessage(
     serializer: KSerializer<HEADER>, bodySerializer: KSerializer<BODY>,
@@ -19,17 +20,25 @@ fun <HEADER : Any, BODY : Any> toMessage(
 }
 
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
-inline fun <reified T : Any> toJSON(serializer: KSerializer<T>, event: T): EBMessageHeader {
+
+inline fun <reified T : Any> toJSON(
+    serializer: KSerializer<T>,
+    event: T,
+    req: FrontendMessageHeader? = null
+): EBMessageHeader {
+    val resString = req?.messageId ?: "${serializer.descriptor.name}-${Date().toISOString()}"
     return EBMessageHeader(
         FrontendMessageHeader.serializer().descriptor.name, serializer.descriptor.name,
         toMessage(
-            FrontendMessageHeader.serializer(), serializer, FrontendMessageHeader("", false), event
+            FrontendMessageHeader.serializer(),
+            serializer,
+            FrontendMessageHeader("", false, resString),
+            event
         )
     )
 }
 
-fun <T : Any> toName(serializer: KSerializer<T>) = serializer.descriptor.name
-
+fun <T : Any> KSerializer<T>.toName() = descriptor.name
 
 fun <T : Any> EBMessageHeader.toMessage(serializer: KSerializer<T>): Message<FrontendMessageHeader, T> {
     return JSON.parse(Message.serializer(FrontendMessageHeader.serializer(), serializer), json)
@@ -39,23 +48,36 @@ fun <T : Any> EBMessageHeader.toObject(serializer: KSerializer<T>): T {
     return toMessage(serializer).e
 }
 
-class Translater<T : Any> internal constructor(val serializer: KSerializer<T>, val fct: (T, EBWebsocket) -> Unit) {
-    constructor(serializer: KSerializer<T>, fct: (T) -> Unit) : this(serializer, { it, _ -> fct(it) })
+class Translater<T : Any> internal constructor(
+    val serializer: KSerializer<T>,
+    val fct: (T, FrontendMessageHeader, EBWebsocket) -> Unit
+) {
+    constructor(serializer: KSerializer<T>, fct: (T) -> Unit) : this(serializer, { it, _, _ -> fct(it) })
+    constructor(serializer: KSerializer<T>, fct: (T, FrontendMessageHeader) -> Unit) : this(
+        serializer,
+        { it, f, _ -> fct(it, f) })
+
+    constructor(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) : this(
+        serializer,
+        { it, _, e -> fct(it, e) })
+
+    val name
+        get() = serializer.descriptor.name
 
     fun call(ebWebsocket: EBWebsocket, messageHeader: EBMessageHeader, func: (FrontendMessageHeader) -> Unit): Boolean {
-        val name = toName(serializer)
         if (messageHeader.body == name) {
             logger.trace { "hit on $name" }
             val message = messageHeader.toMessage(serializer)
             func(message.messageHeader)
-            fct(message.e, ebWebsocket)
+            fct(message.e, message.messageHeader, ebWebsocket)
             return true
         }
         return false
     }
 }
 
-fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) = Translater(serializer, fct)
+fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: (T, EBWebsocket) -> Unit) =
+    Translater(serializer, fct)
 
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.debug { "protocol: ${window.location.protocol}" }
@@ -104,14 +126,29 @@ class EBWebsocket(
         }
     }
 
-    fun send(messageHeader: EBMessageHeader) {
+    private val responseTranslaters = mutableListOf<Translater<out WSEvent>>()
+
+    fun send(messageHeader: EBMessageHeader, translater: Translater<out WSEvent>? = null) {
         logger.trace { "send messageHeader: $messageHeader" }
+        translater?.let { responseTranslaters.add(translater) }
         ws.send(messageHeader.serialize())
     }
 
+    fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: (T) -> Unit) {
+        send(messageHeader, Translater(serializer, func) as Translater<out WSEvent>)
+    }
+
+    private fun isResponse(messageHeader: EBMessageHeader) = responseTranslaters.any { it.name == messageHeader.body }
+
     private fun run(messageHeader: EBMessageHeader): Boolean {
-        val complete = translaters + currentTranslaters()
-        return complete.takeWhile { !it.call(this, messageHeader, onHeader) }.size != complete.size
+        return if (isResponse(messageHeader)) {
+            val response = responseTranslaters.find { it.call(this, messageHeader, onHeader) }!!
+            responseTranslaters.remove(response)
+            true
+        } else {
+            val complete = translaters + currentTranslaters()
+            complete.takeWhile { !it.call(this, messageHeader, onHeader) }.size != complete.size
+        }
     }
 
     private fun parse(event: MessageEvent) {
