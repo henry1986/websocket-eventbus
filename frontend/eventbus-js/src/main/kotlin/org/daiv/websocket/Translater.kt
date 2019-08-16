@@ -85,6 +85,8 @@ class Translater<T : Any> internal constructor(
 fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: suspend (T, EBWebsocket) -> Unit) =
     Translater(serializer, fct)
 
+fun <T:Any> translater(serializer: KSerializer<T>, fct: suspend (T) -> Unit) = Translater(serializer, fct)
+
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.debug { "protocol: ${window.location.protocol}" }
     val protocol = if (window.location.protocol == "http:" || window.location.protocol == "file:") "ws" else "wss"
