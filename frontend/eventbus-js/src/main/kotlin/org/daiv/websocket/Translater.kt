@@ -85,7 +85,7 @@ class Translater<T : Any> internal constructor(
 fun <T : Any> tranlaterWithEB(serializer: KSerializer<T>, fct: suspend (T, EBWebsocket) -> Unit) =
     Translater(serializer, fct)
 
-fun <T:Any> translater(serializer: KSerializer<T>, fct: suspend (T) -> Unit) = Translater(serializer, fct)
+fun <T : Any> translater(serializer: KSerializer<T>, fct: suspend (T) -> Unit) = Translater(serializer, fct)
 
 fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.debug { "protocol: ${window.location.protocol}" }
@@ -103,19 +103,34 @@ fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     return ws
 }
 
+interface DataSender {
+    fun send(messageHeader: EBMessageHeader, translater: Translater<out WSEvent>? = null)
+
+    fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: suspend (T) -> Unit) {
+        send(messageHeader, Translater(serializer, func) as Translater<out WSEvent>)
+    }
+}
+
+interface WebSocketSender : DataSender {
+    var currentTranslaters: () -> List<Translater<out WSEvent>>
+    var onclose: (Event) -> Unit
+    var onopen: (Event) -> Unit
+    var onerror: (Event) -> Unit
+}
+
 class EBWebsocket(
     private val translaters: List<Translater<out WSEvent>> = emptyList(),
     private val ws: WebSocket = startWebsocket(),
     private val onHeader: (FrontendMessageHeader) -> Unit = {}
-) {
+) : WebSocketSender {
     companion object {
         private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
     }
 
-    var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
-    var onclose: (Event) -> Unit = {}
-    var onopen: (Event) -> Unit = {}
-    var onerror: (Event) -> Unit = {}
+    override var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
+    override var onclose: (Event) -> Unit = {}
+    override var onopen: (Event) -> Unit = {}
+    override var onerror: (Event) -> Unit = {}
 
     init {
         ws.onmessage = { GlobalScope.launch { parse(it) } }
@@ -136,14 +151,10 @@ class EBWebsocket(
 
     private val responseTranslaters = mutableListOf<Translater<out WSEvent>>()
 
-    fun send(messageHeader: EBMessageHeader, translater: Translater<out WSEvent>? = null) {
+    override fun send(messageHeader: EBMessageHeader, translater: Translater<out WSEvent>?) {
         logger.trace { "send messageHeader: $messageHeader" }
         translater?.let { responseTranslaters.add(translater) }
         ws.send(messageHeader.serialize())
-    }
-
-    fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: suspend (T) -> Unit) {
-        send(messageHeader, Translater(serializer, func) as Translater<out WSEvent>)
     }
 
     private fun isResponse(messageHeader: EBMessageHeader) = responseTranslaters.any { it.name == messageHeader.body }
@@ -170,3 +181,4 @@ class EBWebsocket(
         }
     }
 }
+
