@@ -23,7 +23,7 @@ fun <HEADER : Any, BODY : Any> toMessage(
 
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 
-inline fun <reified T : Any> toJSON(
+fun <T : Any> toJSON(
     serializer: KSerializer<T>,
     event: T,
     req: FrontendMessageHeader? = null
@@ -105,6 +105,14 @@ fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
 
 interface DataSender {
     fun send(messageHeader: EBMessageHeader, translater: Translater<out WSEvent>? = null)
+
+    fun <T : Any> send(serializer: KSerializer<T>, t: T) {
+        send(toJSON(serializer, t))
+    }
+
+    fun <T : Any, R : Any> send(serializer: KSerializer<T>, t: T, response: KSerializer<R>, func: suspend (R) -> Unit) {
+        send(toJSON(serializer, t), Translater(response, func) as Translater<out WSEvent>)
+    }
 
     fun <T : Any> send(messageHeader: EBMessageHeader, serializer: KSerializer<T>, func: suspend (T) -> Unit) {
         send(messageHeader, Translater(serializer, func) as Translater<out WSEvent>)
