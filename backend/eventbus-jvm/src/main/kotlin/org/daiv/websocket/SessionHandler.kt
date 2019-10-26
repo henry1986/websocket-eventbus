@@ -9,6 +9,7 @@ import org.daiv.util.DefaultRegisterer
 import org.daiv.util.Registerer
 import org.daiv.websocket.*
 import java.util.*
+import kotlin.reflect.KClass
 
 
 class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
@@ -55,8 +56,52 @@ fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
     "response-${header.messageId}"
 } ?: "${event::class.simpleName}-${Date()}"
 
-interface SessionHandler {
+interface MessageHandler {
     val controlledChannel: ControlledChannel
+    fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
+    fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
+        toWSEnd(Message(frontendMessageHeader, event))
+    }
+
+    fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
+        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
+    }
+
+    fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
+        toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
+}
+
+interface MessageReceiver<T : WSEvent> {
+    suspend fun onMessage(t: T)
+}
+
+//interface TestEvent : WSEvent
+//class TestReceiver : MessageReceiver<TestEvent>
+//
+//fun example() {
+//    SessionHandlerManager(ControlledChannelImpl(), mapOf(TestEvent::class to TestReceiver()))
+//}
+
+class SessionHandlerManager(
+    override val controlledChannel: ControlledChannel,
+    val map: Map<KClass<out WSEvent>, MessageReceiver<out WSEvent>>
+) : SessionHandler {
+
+    override suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler {
+        val event = message.e
+        val r = map.filter { it.key.isInstance(event) }.values.firstOrNull()
+        if (r == null) {
+            throw RuntimeException("no MessageHandler for event: $event found")
+        } else {
+            r as MessageReceiver<WSEvent>
+            r.onMessage(event)
+        }
+        return this
+    }
+
+}
+
+interface SessionHandler : MessageHandler {
 
     fun shallClose() = false
 
@@ -65,21 +110,9 @@ interface SessionHandler {
      */
     suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler
 
-    fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
 
     fun onInit() {}
 
     fun onClose() {}
 
-    fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
-        toWSEnd(Message(frontendMessageHeader, event))
-    }
-
-
-    fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
-        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
-    }
-
-    fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
-        toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
 }
