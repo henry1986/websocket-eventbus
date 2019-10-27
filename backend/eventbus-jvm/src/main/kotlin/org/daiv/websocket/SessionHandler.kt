@@ -56,7 +56,7 @@ fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
     "response-${header.messageId}"
 } ?: "${event::class.simpleName}-${Date()}"
 
-interface MessageHandler {
+interface MessageSender {
     val controlledChannel: ControlledChannel
     fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
     fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
@@ -72,20 +72,21 @@ interface MessageHandler {
 }
 
 interface MessageReceiver<T : WSEvent> {
-    suspend fun onMessage(t: T)
+    suspend fun onMessage(event: T)
 }
 
-//interface TestEvent : WSEvent
-//class TestReceiver : MessageReceiver<TestEvent>
-//
-//fun example() {
-//    SessionHandlerManager(ControlledChannelImpl(), mapOf(TestEvent::class to TestReceiver()))
-//}
+interface TestEvent : WSEvent
+class TestReceiver : MessageReceiver<TestEvent>{
+    override suspend fun onMessage(event: TestEvent) {
+    }
 
-class SessionHandlerManager(
-    override val controlledChannel: ControlledChannel,
-    val map: Map<KClass<out WSEvent>, MessageReceiver<out WSEvent>>
-) : SessionHandler {
+}
+
+fun example() {
+    SessionHandlerManager(mapOf(TestEvent::class to TestReceiver()))
+}
+
+class SessionHandlerManager(val map: Map<KClass<out WSEvent>, MessageReceiver<out WSEvent>>) : SessionHandler {
 
     override suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler {
         val event = message.e
@@ -101,7 +102,7 @@ class SessionHandlerManager(
 
 }
 
-interface SessionHandler : MessageHandler {
+interface SessionHandler {
 
     fun shallClose() = false
 
