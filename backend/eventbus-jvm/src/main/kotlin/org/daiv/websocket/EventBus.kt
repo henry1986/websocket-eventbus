@@ -36,9 +36,9 @@ fun EBMessageHeader.parse(): Message<out Any, out Any> {
 //                           toMessage(FrontendMessageHeader.serializer(), serializer, FrontendMessageHeader(""), any))
 //}
 
-fun toJSON(message: Message<Any, Any>): EBMessageHeader {
-    val json = Gson().toJson(message)
-    return EBMessageHeader(message.messageHeader::class.qualifiedName!!, message.e::class.qualifiedName!!, json)
+fun Message<Any, Any>.toJSON(): EBMessageHeader {
+    val json = Gson().toJson(this)
+    return EBMessageHeader(messageHeader::class.qualifiedName!!, e::class.qualifiedName!!, json)
 }
 
 class EventBusReceiver(private val incoming: ReceiveChannel<Frame>, initHandler: SessionHandler) {

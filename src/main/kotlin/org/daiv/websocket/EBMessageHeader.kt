@@ -6,6 +6,8 @@ import kotlinx.serialization.json.JSON
 
 interface WSEvent
 
+internal expect fun dateString():String
+
 @Serializable
 data class FrontendMessageHeader constructor(val farmName: String, val isRemote: Boolean, val messageId:String)
 
@@ -13,11 +15,31 @@ data class FrontendMessageHeader constructor(val farmName: String, val isRemote:
 data class ForwardedMessage constructor(val id:String, val farmName:String)
 
 
-interface ControlledChannel {
-    val farmName: String
-    fun toWSEnd(event: Message<Any, Any>)
+fun <T : Any> toJSON(
+    serializer: KSerializer<T>,
+    event: T,
+    req: FrontendMessageHeader? = null
+): EBMessageHeader {
+    val resString = req?.messageId ?: "${serializer.descriptor.name}-${dateString()}"
+    return EBMessageHeader(
+        FrontendMessageHeader.serializer().descriptor.name, serializer.descriptor.name,
+        toMessage(
+            FrontendMessageHeader.serializer(),
+            serializer,
+            FrontendMessageHeader("", false, resString),
+            event
+        )
+    )
 }
 
+fun <HEADER : Any, BODY : Any> toMessage(
+    serializer: KSerializer<HEADER>, bodySerializer: KSerializer<BODY>,
+    header: HEADER, body: BODY
+): String {
+    val s = Message.serializer(serializer, bodySerializer)
+    val e = Message(header, body)
+    return JSON.nonstrict.stringify(s, e)
+}
 
 @Serializable
 data class Message<T : Any, E : Any>(val messageHeader: T, val e: E)

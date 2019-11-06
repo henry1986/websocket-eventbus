@@ -12,33 +12,9 @@ import org.w3c.dom.events.Event
 import kotlin.browser.window
 import kotlin.js.Date
 
-fun <HEADER : Any, BODY : Any> toMessage(
-    serializer: KSerializer<HEADER>, bodySerializer: KSerializer<BODY>,
-    header: HEADER, body: BODY
-): String {
-    val s = Message.serializer(serializer, bodySerializer)
-    val e = Message(header, body)
-    return JSON.nonstrict.stringify(s, e)
-}
 
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 
-fun <T : Any> toJSON(
-    serializer: KSerializer<T>,
-    event: T,
-    req: FrontendMessageHeader? = null
-): EBMessageHeader {
-    val resString = req?.messageId ?: "${serializer.descriptor.name}-${Date().toISOString()}"
-    return EBMessageHeader(
-        FrontendMessageHeader.serializer().descriptor.name, serializer.descriptor.name,
-        toMessage(
-            FrontendMessageHeader.serializer(),
-            serializer,
-            FrontendMessageHeader("", false, resString),
-            event
-        )
-    )
-}
 
 fun <T : Any> KSerializer<T>.toName() = descriptor.name
 

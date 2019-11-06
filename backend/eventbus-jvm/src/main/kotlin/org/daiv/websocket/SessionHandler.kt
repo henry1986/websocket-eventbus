@@ -5,12 +5,23 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
 import mu.KLogging
+import mu.KotlinLogging
 import org.daiv.util.DefaultRegisterer
 import org.daiv.util.Registerer
-import org.daiv.websocket.*
 import java.util.*
 import kotlin.reflect.KClass
 
+private val logger = KotlinLogging.logger {}
+
+interface ControlledChannel {
+    val farmName: String
+    fun toWSEnd(event: Message<Any, Any>){
+        val eb = event.toJSON()
+        ControlledChannelImpl.logger.trace { "event send to Frontend: $event" }
+        toWSEndSerializer(eb)
+    }
+    fun toWSEndSerializer(ebMessageHeader: EBMessageHeader)
+}
 
 class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
     Registerer<ControlledChannel> by registerer, ControlledChannel {
@@ -22,29 +33,32 @@ class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChan
             it.toWSEnd(event)
         }
     }
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
+        throw RuntimeException("calling not possible")
+    }
 }
 
 class ControlledChannelAdapter(val controlledChannel: ControlledChannel, private val messageHeader: ForwardedMessage) :
     ControlledChannel {
     override val farmName = messageHeader.farmName
     override fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(Message(messageHeader, event.e))
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
+        throw RuntimeException("calling not possible")
+    }
 }
 
 class ControlledChannelImpl(private val sendChannel: SendChannel<Frame>, override val farmName: String) :
     ControlledChannel {
     companion object : KLogging()
 
-
-    override fun toWSEnd(event: Message<Any, Any>) {
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
         GlobalScope.launch {
             try {
-                val eb = toJSON(event)
-                logger.trace { "event send to Frontend: $event" }
-                val string = eb.serialize()
+                val string = ebMessageHeader.serialize()
                 logger.debug { "string send to Frontend: $string" }
                 sendChannel.send(Frame.Text(string))
             } catch (t: Throwable) {
-                logger.error(t) { "error at sending $event" }
+                logger.error(t) { "error at sending $ebMessageHeader" }
             }
         }
     }
@@ -67,6 +81,8 @@ interface MessageSender {
         toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
     }
 
+    fun toFrontend(ebMessageHeader: EBMessageHeader) = controlledChannel.toWSEndSerializer(ebMessageHeader)
+
     fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
         toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
 }
@@ -76,10 +92,10 @@ interface MessageReceiver<T : WSEvent> {
 }
 
 interface TestEvent : WSEvent
-class TestReceiver : MessageReceiver<TestEvent>{
+
+class TestReceiver : MessageReceiver<TestEvent> {
     override suspend fun onMessage(event: TestEvent) {
     }
-
 }
 
 fun example() {
