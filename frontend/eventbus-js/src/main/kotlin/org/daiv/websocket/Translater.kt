@@ -3,14 +3,13 @@ package org.daiv.websocket
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.JSON
+import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.w3c.dom.CloseEvent
 import org.w3c.dom.MessageEvent
 import org.w3c.dom.WebSocket
 import org.w3c.dom.events.Event
 import kotlin.browser.window
-import kotlin.js.Date
 
 
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
@@ -19,7 +18,7 @@ private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 fun <T : Any> KSerializer<T>.toName() = descriptor.name
 
 fun <T : Any> EBMessageHeader.toMessage(serializer: KSerializer<T>): Message<FrontendMessageHeader, T> {
-    return JSON.parse(Message.serializer(FrontendMessageHeader.serializer(), serializer), json)
+    return Json.nonstrict.parse(Message.serializer(FrontendMessageHeader.serializer(), serializer), json)
 }
 
 fun <T : Any> EBMessageHeader.toObject(serializer: KSerializer<T>): T {

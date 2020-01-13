@@ -2,7 +2,7 @@ package org.daiv.websocket
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JSON
+import kotlinx.serialization.json.Json
 
 interface WSEvent
 
@@ -38,7 +38,7 @@ fun <HEADER : Any, BODY : Any> toMessage(
 ): String {
     val s = Message.serializer(serializer, bodySerializer)
     val e = Message(header, body)
-    return JSON.nonstrict.stringify(s, e)
+    return Json.nonstrict.stringify(s, e)
 }
 
 @Serializable
