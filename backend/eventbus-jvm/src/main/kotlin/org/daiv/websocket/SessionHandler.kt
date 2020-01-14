@@ -4,6 +4,9 @@ import io.ktor.http.cio.websocket.Frame
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.modules.EmptyModule
+import kotlinx.serialization.modules.SerialModule
 import mu.KLogging
 import mu.KotlinLogging
 import org.daiv.util.DefaultRegisterer
@@ -15,11 +18,12 @@ private val logger = KotlinLogging.logger {}
 
 interface ControlledChannel {
     val farmName: String
-    fun toWSEnd(event: Message<Any, Any>){
+    fun toWSEnd(event: Message<Any, Any>) {
         val eb = event.toJSON()
         ControlledChannelImpl.logger.trace { "event send to Frontend: $event" }
         toWSEndSerializer(eb)
     }
+
     fun toWSEndSerializer(ebMessageHeader: EBMessageHeader)
 }
 
@@ -33,6 +37,7 @@ class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChan
             it.toWSEnd(event)
         }
     }
+
     override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
         throw RuntimeException("calling not possible")
     }
@@ -72,10 +77,15 @@ fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
 
 interface MessageSender {
     val controlledChannel: ControlledChannel
+    val context: SerialModule
+        get() = EmptyModule
+
     fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
     fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
         toWSEnd(Message(frontendMessageHeader, event))
     }
+
+    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T) = toFrontend(toJSON(serializer, t, context = context))
 
     fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
         toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
