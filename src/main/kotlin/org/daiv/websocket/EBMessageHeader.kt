@@ -83,3 +83,20 @@ data class EBMessageHeader(val header: String, val body: String, val json: Strin
         }
     }
 }
+
+
+interface SessionHandler {
+
+    fun shallClose() = false
+
+    /**
+     * returns next SessionHandler
+     */
+    suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler
+
+
+    fun onInit() {}
+
+    fun onClose() {}
+
+}

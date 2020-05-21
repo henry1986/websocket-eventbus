@@ -127,19 +127,3 @@ class SessionHandlerManager(val map: Map<KClass<out WSEvent>, MessageReceiver<ou
     }
 
 }
-
-interface SessionHandler {
-
-    fun shallClose() = false
-
-    /**
-     * returns next SessionHandler
-     */
-    suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler
-
-
-    fun onInit() {}
-
-    fun onClose() {}
-
-}
