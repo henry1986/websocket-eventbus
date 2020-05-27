@@ -97,9 +97,6 @@ interface MessageSender {
         toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
 }
 
-interface MessageReceiver<T : WSEvent> {
-    suspend fun onMessage(event: T)
-}
 
 interface TestEvent : WSEvent
 
