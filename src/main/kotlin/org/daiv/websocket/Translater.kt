@@ -10,6 +10,19 @@ fun <T : Any> EBMessageHeader.toObject(context: SerialModule, serializer: KSeria
     return parse(context, serializer).e
 }
 
+class TranslaterBuilder(val context: SerialModule, val list: List<Translater<*>> = listOf()) {
+    fun <T : Any> next(serializer: KSerializer<T>, fct: suspend (T) -> Unit): TranslaterBuilder =
+        TranslaterBuilder(context, list + Translater(serializer, context, fct))
+
+    fun <T : Any> next(serializer: KSerializer<T>, fct: suspend (T, EBDataHandler) -> Unit): TranslaterBuilder =
+        TranslaterBuilder(context, list + Translater(serializer, context, fct))
+
+    fun <T : Any> next(
+        serializer: KSerializer<T>,
+        fct: suspend (T, FrontendMessageHeader, EBDataHandler) -> Unit
+    ): TranslaterBuilder = TranslaterBuilder(context, list + Translater(serializer, context, fct))
+}
+
 class Translater<T : Any> internal constructor(
     val serializer: KSerializer<T>,
     val context: SerialModule,
