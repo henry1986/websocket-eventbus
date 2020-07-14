@@ -62,14 +62,18 @@ class EventBusReceiver(private val incoming: ReceiveChannel<Frame>, initHandler:
         incomingConsume()
     }
 
-    suspend fun handle() {
+    suspend fun handle(c: ControlledChannel) {
         try {
             incomingConsume()
         } catch (throwable: Throwable) {
             logger.error("incoming consume throws: ", throwable)
         } finally {
             logger.info { "websocket closed" }
-            sessionHandler.onClose()
+            sessionHandler.let {
+                if (it is SessionHandlerManager) {
+                    it.unregister(c)
+                }
+            }
         }
     }
 }

@@ -57,8 +57,10 @@ class Translater<T : Any> internal constructor(
         if (messageHeader.body == name) {
             logger.trace { "hit on $name" }
             val message = messageHeader.parse(context, serializer)
+            logger.trace { "message was parsed for $name - $message" }
             func(message.messageHeader)
             fct(message.e, message.messageHeader, ebWebsocket)
+            logger.trace { "function was called for $name" }
             return true
         }
         return false

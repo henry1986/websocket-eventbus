@@ -25,6 +25,9 @@ interface ControlledChannel {
     }
 
     fun toWSEndSerializer(ebMessageHeader: EBMessageHeader)
+    fun toFrontend(ebMessageHeader: EBMessageHeader) = toWSEndSerializer(ebMessageHeader)
+    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T, context: SerialModule = EmptyModule) =
+        toFrontend(toJSON(serializer, t, context = context))
 }
 
 class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
@@ -75,23 +78,33 @@ fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
     "response-${header.messageId}"
 } ?: "${event::class.simpleName}-${Date()}"
 
+interface ControlledChannelListener{
+    fun onMessageListener(controlledChannel: ControlledChannel) {
+    }
+
+    fun removeMessageListener(controlledChannel: ControlledChannel) {
+
+    }
+}
+
 interface MessageSender {
     val controlledChannel: ControlledChannel
     val context: SerialModule
         get() = EmptyModule
+
 
     fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
     fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
         toWSEnd(Message(frontendMessageHeader, event))
     }
 
-    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T) = toFrontend(toJSON(serializer, t, context = context))
+    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T) =
+        controlledChannel.toFrontend(serializer, t, context = context)
 
     fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
         toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
     }
 
-    fun toFrontend(ebMessageHeader: EBMessageHeader) = controlledChannel.toWSEndSerializer(ebMessageHeader)
 
     fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
         toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
@@ -123,4 +136,19 @@ class SessionHandlerManager(val map: Map<KClass<out WSEvent>, MessageReceiver<ou
         return this
     }
 
+    fun register(controlledChannel: ControlledChannel) {
+        map.values.forEach {
+            if (it is ControlledChannelListener) {
+                it.onMessageListener(controlledChannel)
+            }
+        }
+    }
+
+    fun unregister(controlledChannel: ControlledChannel) {
+        map.values.forEach {
+            if (it is ControlledChannelListener) {
+                it.removeMessageListener(controlledChannel)
+            }
+        }
+    }
 }

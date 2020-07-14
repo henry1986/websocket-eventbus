@@ -97,6 +97,6 @@ interface SessionHandler {
 
     fun onInit() {}
 
-    fun onClose() {}
+    suspend fun onClose() {}
 
 }
