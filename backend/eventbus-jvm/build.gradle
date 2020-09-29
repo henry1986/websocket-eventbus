@@ -1,4 +1,0 @@
-dependencies{
-    expectedBy project(':')
-}
-apply plugin: 'kotlinx-serialization'
