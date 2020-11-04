@@ -7,13 +7,13 @@
 plugins {
     kotlin("multiplatform") version "1.4.10"
     kotlin("plugin.serialization") version "1.4.10"
-    id("org.daiv.dependency") version ("0.0.6")
+    id("org.daiv.dependency") version ("0.0.8")
     id("com.jfrog.artifactory") version "4.17.2"
     `maven-publish`
 }
 
 group = "org.daiv.websocket"
-version = "0.5.2"
+version = "0.5.3"
 
 repositories {
     mavenCentral()
@@ -71,21 +71,11 @@ kotlin {
                 ktor("websockets")
                 gson()
             }
-//            dependencies {
-////                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:$serialization_version")
-////                api("org.daiv.util:kutil-jvm:$kutil_version")
-//                implementation("io.ktor:ktor-websockets:$ktor_version")
-//                implementation("com.google.code.gson:gson:2.8.5")
-//
-//            }
         }
         val jvmTest by getting {
             versions.deps(this){
                 mockk()
-            }
-            dependencies {
-                implementation(kotlin("test-junit"))
-//                api("io.mockk:mockk:1.9.2")
+                kotlinModule("test-junit")
             }
         }
         val jsMain by getting

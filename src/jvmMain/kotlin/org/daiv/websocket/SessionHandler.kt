@@ -11,6 +11,7 @@ import mu.KLogging
 import mu.KotlinLogging
 import org.daiv.util.DefaultRegisterer
 import org.daiv.util.Registerer
+import org.slf4j.Marker
 import java.util.*
 import kotlin.reflect.KClass
 
@@ -18,30 +19,44 @@ private val logger = KotlinLogging.logger {}
 
 interface ControlledChannel {
     val farmName: String
-    fun toWSEnd(event: Message<Any, Any>) {
+    val notLoggingFilterList: List<String>
+        get() = emptyList()
+
+    fun toWSEnd(event: Message<Any, Any>, marker: Marker? = null) {
         val eb = event.toJSON()
-        ControlledChannelImpl.logger.trace { "event send to Frontend: $event" }
-        toWSEndSerializer(eb)
+        toWSEndSerializer(eb, marker)
     }
 
-    fun toWSEndSerializer(ebMessageHeader: EBMessageHeader)
-    fun toFrontend(ebMessageHeader: EBMessageHeader) = toWSEndSerializer(ebMessageHeader)
-    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T, context: SerializersModule = EmptySerializersModule) =
-        toFrontend(toJSON(serializer, t, context = context))
+    fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker? = null)
+    fun toFrontend(ebMessageHeader: EBMessageHeader, marker: Marker? = null) = toWSEndSerializer(ebMessageHeader, marker)
+    fun <T : Any> toFrontend(
+        serializer: KSerializer<T>,
+        t: T,
+        context: SerializersModule = EmptySerializersModule,
+        marker: Marker?
+    ) {
+        if (!notLoggingFilterList.contains(serializer.descriptor.serialName)) {
+            ControlledChannelImpl.logger.debug { "event send to Frontend: $t" }
+        }
+        toFrontend(toJSON(serializer, t, context = context), marker)
+    }
 }
 
-class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer()) :
+class ControlledChannelNotifier(
+    val registerer: DefaultRegisterer<ControlledChannel> = DefaultRegisterer(),
+    override val notLoggingFilterList: List<String> = emptyList()
+) :
     Registerer<ControlledChannel> by registerer, ControlledChannel {
     override val farmName: String
         get() = registerer.firstOrNull()?.farmName ?: "there is no known farm, as there is no channel registered"
 
-    override fun toWSEnd(event: Message<Any, Any>) {
+    override fun toWSEnd(event: Message<Any, Any>, marker: Marker?) {
         registerer.forEach {
-            it.toWSEnd(event)
+            it.toWSEnd(event, marker)
         }
     }
 
-    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker?) {
         throw RuntimeException("calling not possible")
     }
 }
@@ -49,21 +64,29 @@ class ControlledChannelNotifier(val registerer: DefaultRegisterer<ControlledChan
 class ControlledChannelAdapter(val controlledChannel: ControlledChannel, private val messageHeader: ForwardedMessage) :
     ControlledChannel {
     override val farmName = messageHeader.farmName
-    override fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(Message(messageHeader, event.e))
-    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
+    override val notLoggingFilterList: List<String>
+        get() = controlledChannel.notLoggingFilterList
+
+    override fun toWSEnd(event: Message<Any, Any>, marker: Marker?) =
+        controlledChannel.toWSEnd(Message(messageHeader, event.e), marker)
+
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker?) {
         throw RuntimeException("calling not possible")
     }
 }
 
-class ControlledChannelImpl(private val sendChannel: SendChannel<Frame>, override val farmName: String) :
-    ControlledChannel {
+class ControlledChannelImpl(
+    private val sendChannel: SendChannel<Frame>,
+    override val farmName: String,
+    override val notLoggingFilterList: List<String> = emptyList()
+) : ControlledChannel {
     companion object : KLogging()
 
-    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader) {
+    override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker?) {
         GlobalScope.launch {
             try {
                 val string = ebMessageHeader.serialize()
-                logger.debug { "string send to Frontend: $string" }
+                logger.debug(marker) { "string send to Frontend: $string" }
                 sendChannel.send(Frame.Text(string))
             } catch (t: Throwable) {
                 logger.error(t) { "error at sending $ebMessageHeader" }
@@ -93,21 +116,27 @@ interface MessageSender {
         get() = EmptySerializersModule
 
 
-    fun toWSEnd(event: Message<Any, Any>) = controlledChannel.toWSEnd(event)
-    fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent) {
-        toWSEnd(Message(frontendMessageHeader, event))
+    fun toWSEnd(event: Message<Any, Any>, marker: Marker? = null) = controlledChannel.toWSEnd(event, marker)
+    fun toFrontend(frontendMessageHeader: FrontendMessageHeader, event: WSEvent, marker: Marker? = null) {
+        toWSEnd(Message(frontendMessageHeader, event), marker)
     }
 
-    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T) =
-        controlledChannel.toFrontend(serializer, t, context = context)
+    fun <T : Any> toFrontend(serializer: KSerializer<T>, t: T, marker: Marker? = null) {
+        controlledChannel.toFrontend(serializer, t, context = context, marker)
+    }
 
-    fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null) {
-        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event)
+    fun toFrontend(event: WSEvent, req: Message<out Any, out WSEvent>? = null, marker: Marker? = null) {
+        toFrontend(FrontendMessageHeader(controlledChannel.farmName, false, req.reqString(event)), event, marker)
     }
 
 
-    fun toFrontendFromRemote(remoteName: String, event: WSEvent, req: Message<out Any, out WSEvent>? = null) =
-        toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event)
+    fun toFrontendFromRemote(
+        remoteName: String,
+        event: WSEvent,
+        req: Message<out Any, out WSEvent>? = null,
+        marker: Marker? = null
+    ) =
+        toFrontend(FrontendMessageHeader(remoteName, true, req.reqString(event)), event, marker)
 }
 
 
