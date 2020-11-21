@@ -16,7 +16,6 @@ data class FrontendMessageHeader constructor(val farmName: String, val isRemote:
 @Serializable
 data class ForwardedMessage constructor(val id: String, val farmName: String)
 
-
 fun <T : Any> toJSON(
     serializer: KSerializer<T>,
     event: T,
@@ -26,6 +25,7 @@ fun <T : Any> toJSON(
     val resString = req?.messageId ?: "${serializer.descriptor.serialName}-${dateString()}"
     val fmSerializer = FrontendMessageHeader.serializer()
     val message = stringify(fmSerializer, serializer, FrontendMessageHeader("", false, resString), event, context)
+
     return EBMessageHeader(fmSerializer.descriptor.serialName, serializer.descriptor.serialName, message)
 }
 
@@ -36,6 +36,7 @@ fun <T : Any> EBMessageHeader.parse(
     val jsonParser = Json {
         allowStructuredMapKeys = true
         ignoreUnknownKeys = true
+        isLenient = true
         serializersModule = context
     }
     return jsonParser.decodeFromString(Message.serializer(FrontendMessageHeader.serializer(), serializer), this.json)
@@ -53,6 +54,7 @@ fun <HEADER : Any, BODY : Any> stringify(
     val json = Json {
         allowStructuredMapKeys = true
         ignoreUnknownKeys = true
+        isLenient = true
         serializersModule = context
     }
     return json.encodeToString(s, e)
@@ -68,12 +70,9 @@ data class Message<T : Any, E : Any>(val messageHeader: T, val e: E)
 //    return JSON.nonstrict.stringify(s, e)
 //}
 
-
 data class EBMessageHeader constructor(val header: String, val body: String, val json: String) {
 
-    fun serialize(): String {
-        return "[$header, $body, $json]"
-    }
+    fun serialize() = "[$header, $body, $json]"
 
     companion object {
         fun parse(string: String): EBMessageHeader {
@@ -92,18 +91,3 @@ data class EBMessageHeader constructor(val header: String, val body: String, val
 }
 
 
-interface SessionHandler {
-
-    fun shallClose() = false
-
-    /**
-     * returns next SessionHandler
-     */
-    suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler
-
-
-    fun onInit() {}
-
-    suspend fun onClose() {}
-
-}

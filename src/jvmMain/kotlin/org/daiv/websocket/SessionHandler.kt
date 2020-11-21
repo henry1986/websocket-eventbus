@@ -28,12 +28,14 @@ interface ControlledChannel {
     }
 
     fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker? = null)
-    fun toFrontend(ebMessageHeader: EBMessageHeader, marker: Marker? = null) = toWSEndSerializer(ebMessageHeader, marker)
+    fun toFrontend(ebMessageHeader: EBMessageHeader, marker: Marker? = null) =
+        toWSEndSerializer(ebMessageHeader, marker)
+
     fun <T : Any> toFrontend(
         serializer: KSerializer<T>,
         t: T,
         context: SerializersModule = EmptySerializersModule,
-        marker: Marker?
+        marker: Marker? = null
     ) {
         if (!notLoggingFilterList.contains(serializer.descriptor.serialName)) {
             ControlledChannelImpl.logger.debug { "event send to Frontend: $t" }
@@ -57,7 +59,9 @@ class ControlledChannelNotifier(
     }
 
     override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker?) {
-        throw RuntimeException("calling not possible")
+        registerer.forEach {
+            it.toWSEndSerializer(ebMessageHeader, marker)
+        }
     }
 }
 
@@ -71,7 +75,7 @@ class ControlledChannelAdapter(val controlledChannel: ControlledChannel, private
         controlledChannel.toWSEnd(Message(messageHeader, event.e), marker)
 
     override fun toWSEndSerializer(ebMessageHeader: EBMessageHeader, marker: Marker?) {
-        throw RuntimeException("calling not possible")
+        controlledChannel.toWSEndSerializer(ebMessageHeader, marker)
     }
 }
 
@@ -101,14 +105,6 @@ fun Message<out Any, out WSEvent>?.reqString(event: WSEvent) = this?.let {
     "response-${header.messageId}"
 } ?: "${event::class.simpleName}-${Date()}"
 
-interface ControlledChannelListener {
-    fun onMessageListener(controlledChannel: ControlledChannel) {
-    }
-
-    fun removeMessageListener(controlledChannel: ControlledChannel) {
-
-    }
-}
 
 interface MessageSender {
     val controlledChannel: ControlledChannel
@@ -130,6 +126,7 @@ interface MessageSender {
     }
 
 
+
     fun toFrontendFromRemote(
         remoteName: String,
         event: WSEvent,
@@ -141,6 +138,12 @@ interface MessageSender {
 
 
 interface TestEvent : WSEvent
+
+interface MessageReceiver<T : WSEvent> {
+    fun onInit(controlledChannel: ControlledChannel) {}
+    suspend fun onMessage(event: T)
+    fun onClose(controlledChannel: ControlledChannel) {}
+}
 
 class TestReceiver : MessageReceiver<TestEvent> {
     override suspend fun onMessage(event: TestEvent) {
@@ -165,18 +168,34 @@ class SessionHandlerManager(val map: Map<KClass<out WSEvent>, MessageReceiver<ou
         return this
     }
 
-    fun register(controlledChannel: ControlledChannel) {
-        map.values.forEach {
-            if (it is ControlledChannelListener) {
-                it.onMessageListener(controlledChannel)
-            }
-        }
+    override fun onClose(controlledChannel: ControlledChannel) {
+        map.values.forEach { it.onClose(controlledChannel) }
     }
 
-    fun unregister(controlledChannel: ControlledChannel) {
-        map.values.forEach {
-            if (it is ControlledChannelListener) {
-                it.removeMessageListener(controlledChannel)
+    override fun onInit(controlledChannel: ControlledChannel) {
+        map.values.forEach { it.onInit(controlledChannel) }
+    }
+}
+
+interface SessionHandler {
+
+    fun shallClose() = false
+
+    /**
+     * returns next SessionHandler
+     */
+    suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler
+
+    fun onInit(controlledChannel: ControlledChannel) {}
+
+    fun onClose(controlledChannel: ControlledChannel) {}
+
+    companion object{
+        val closeHandler = object:SessionHandler{
+            override fun shallClose() = true
+
+            override suspend fun frontEndMessage(message: Message<out Any, out WSEvent>): SessionHandler {
+                throw RuntimeException("should not be called again! $message")
             }
         }
     }

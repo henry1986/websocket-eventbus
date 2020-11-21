@@ -103,6 +103,9 @@ class EBDataHandler(
     }
 
     var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
+
+    data class ResponseTranslater(val list: List<Translater<out WSEvent>>)
+
     private val responseTranslaters = mutableListOf<Translater<out WSEvent>>()
     fun <T : Any> send(serializer: KSerializer<T>, t: T) {
         send(toJSON(serializer, t, context = context))
@@ -148,3 +151,4 @@ class EBDataHandler(
         }
     }
 }
+

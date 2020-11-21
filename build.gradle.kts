@@ -1,19 +1,27 @@
-//val coroutines_version = "1.3.9"
-//val kutil_version = "0.3.0"
-//val ktor_version = "1.4.0"
-//
-//val serialization_version = "1.0.0-RC"
+import org.daiv.dependency.Versions
+
+buildscript {
+    repositories {
+        maven { url = uri("https://repo.gradle.org/gradle/libs-releases") }
+        maven("https://daiv.org/artifactory/gradle-dev-local")
+    }
+    dependencies {
+        classpath("org.daiv.dependency:DependencyHandling:0.0.65")
+    }
+}
 
 plugins {
     kotlin("multiplatform") version "1.4.10"
     kotlin("plugin.serialization") version "1.4.10"
-    id("org.daiv.dependency") version ("0.0.8")
     id("com.jfrog.artifactory") version "4.17.2"
+    id("org.daiv.dependency.VersionsPlugin") version "0.1.3"
     `maven-publish`
 }
 
+val versions = org.daiv.dependency.DefaultDependencyBuilder(Versions.current())
+
 group = "org.daiv.websocket"
-version = "0.5.3"
+version = versions.setVersion { eventbus }
 
 repositories {
     mavenCentral()
@@ -37,28 +45,14 @@ kotlin {
             }
         }
     }
-//    val hostOs = System.getProperty("os.name")
-//    val isMingwX64 = hostOs.startsWith("Windows")
-//    val nativeTarget = when {
-//        hostOs == "Mac OS X" -> macosX64("native")
-//        hostOs == "Linux" -> linuxX64("native")
-//        isMingwX64 -> mingwX64("native")
-//        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
-//    }
-    val versions = org.daiv.dependency.Versions.versions1_4_0
 
     sourceSets {
         val commonMain by getting {
-            versions.deps(this){
-                kutil()
-                coroutines()
-                serialization()
+            dependencies {
+                implementation(versions.kutil())
+                implementation(versions.coroutines())
+                implementation(versions.serialization())
             }
-//            dependencies {
-//                implementation("org.daiv.util:kutil:$kutil_version")
-//                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version")
-//                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:$serialization_version")
-//            }
         }
         val commonTest by getting {
             dependencies {
@@ -67,15 +61,15 @@ kotlin {
             }
         }
         val jvmMain by getting {
-            versions.deps(this){
-                ktor("websockets")
-                gson()
+            dependencies {
+                implementation(versions.ktor("websockets"))
+                implementation(versions.gson())
             }
         }
         val jvmTest by getting {
-            versions.deps(this){
-                mockk()
-                kotlinModule("test-junit")
+            dependencies {
+                implementation(versions.mockk())
+                implementation(kotlin("test-junit"))
             }
         }
         val jsMain by getting
@@ -105,3 +99,12 @@ artifactory {
         })
     })
 }
+
+versionPlugin {
+    versionPluginBuilder = Versions.versionPluginBuilder {
+        versionMember = { eventbus }
+        resetVersion = { copy(eventbus = it) }
+    }
+    setDepending(tasks)
+}
+

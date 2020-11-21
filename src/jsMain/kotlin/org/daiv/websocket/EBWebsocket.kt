@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 
 
-fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
+fun startWebsocket(wsPath:String ="ws", onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.debug { "protocol: ${window.location.protocol}" }
     val protocol = if (window.location.protocol == "http:" || window.location.protocol == "file:") "ws" else "wss"
     logger.debug { "ws protocol: $protocol" }
@@ -24,7 +24,7 @@ fun startWebsocket(onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     val host = if (window.location.host == "") onHostEmptyUrl else window.location.host
 
     logger.debug { "host: $host" }
-    val uri = "$protocol://$host/ws"
+    val uri = "$protocol://$host/$wsPath"
     logger.debug { "uri: $uri" }
     val ws = WebSocket(uri)
 
