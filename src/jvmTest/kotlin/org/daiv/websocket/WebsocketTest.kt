@@ -5,7 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertEquals
 
 class WebsocketTest {

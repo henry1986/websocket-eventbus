@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 private val logger = KotlinLogging.logger("org.daiv.websocket.eventbus")
 
 
-fun startWebsocket(wsPath:String ="ws", onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
+fun startWebsocket(wsPath: String = "ws", onHostEmptyUrl: String = "127.0.0.1:8080"): WebSocket {
     logger.debug { "protocol: ${window.location.protocol}" }
     val protocol = if (window.location.protocol == "http:" || window.location.protocol == "file:") "ws" else "wss"
     logger.debug { "ws protocol: $protocol" }
@@ -79,8 +79,14 @@ class EBWebsocket(
     }
 
     private suspend fun parse(event: MessageEvent) {
-        val string = event.data.toString()
-        registerer.suspendEvent { receive(string) }
+        logger.trace { "receive: $event" }
+        event.data?.let {
+            val string = it.toString()
+            logger.trace { "to string: $string" }
+            registerer.suspendEvent { receive(string) }
+        } ?: run {
+            logger.error { "received data is null" }
+        }
     }
 }
 

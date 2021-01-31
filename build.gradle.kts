@@ -3,10 +3,10 @@ import org.daiv.dependency.Versions
 buildscript {
     repositories {
         maven { url = uri("https://repo.gradle.org/gradle/libs-releases") }
-        maven("https://daiv.org/artifactory/gradle-dev-local")
+        maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.65")
+        classpath("org.daiv.dependency:DependencyHandling:0.0.109")
     }
 }
 
@@ -26,7 +26,7 @@ version = versions.setVersion { eventbus }
 repositories {
     mavenCentral()
     maven("https://dl.bintray.com/kotlin/kotlinx")
-    maven("https://daiv.org/artifactory/gradle-dev-local")
+    maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
 }
 
 kotlin {

@@ -2,9 +2,12 @@ package org.daiv.websocket
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import io.ktor.http.cio.websocket.Frame
-import io.ktor.http.cio.websocket.readText
+import io.ktor.http.cio.websocket.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.withContext
 import mu.KLogging
 
 fun EBMessageHeader.parse(): Message<out Any, out Any> {
@@ -41,9 +44,14 @@ fun Message<Any, Any>.toJSON(): EBMessageHeader {
     return EBMessageHeader(messageHeader::class.qualifiedName!!, e::class.qualifiedName!!, json)
 }
 
-class EventBusReceiver(private val incoming: ReceiveChannel<Frame>, initHandler: SessionHandler, val closeCheck: ()->Boolean = {false}) {
-
+class EventBusReceiver(
+    private val incoming: ReceiveChannel<Frame>,
+    initHandler: SessionHandler,
+    val closeCheck: () -> Boolean = { false }
+) {
     companion object : KLogging()
+
+    val newSingleThreadContext = newSingleThreadContext("EventBusReceiverThreadContext")
 
     private var sessionHandler: SessionHandler = initHandler
 
@@ -51,18 +59,25 @@ class EventBusReceiver(private val incoming: ReceiveChannel<Frame>, initHandler:
         val frame = incoming.receive()
         sessionHandler = when {
             frame is Frame.Text -> {
-                if(closeCheck()){
+                if (closeCheck()) {
                     return
                 }
                 val readText = frame.readText()
                 logger.debug { "we got message: $readText" }
                 val parse = EBMessageHeader.parse(readText)
                 val e = parse.parse()
-                sessionHandler.frontEndMessage(e as Message<out Any, out WSEvent>)
+                withContext(newSingleThreadContext) {
+                    try {
+                        sessionHandler.frontEndMessage(e as Message<out Any, out WSEvent>)
+                    } catch (t:Throwable){
+                        logger.error(t) { "catched exception when analyzing frontendmessage" }
+                        sessionHandler
+                    }
+                }
             }
             else -> sessionHandler
         }
-        if(sessionHandler.shallClose()){
+        if (sessionHandler.shallClose()) {
             return
         }
         incomingConsume()

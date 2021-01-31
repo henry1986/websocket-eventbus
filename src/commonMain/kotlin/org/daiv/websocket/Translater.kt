@@ -59,7 +59,12 @@ class Translater<T : Any> internal constructor(
             val message = messageHeader.parse(context, serializer)
             logger.trace { "message was parsed for $name - $message" }
             func(message.messageHeader)
-            fct(message.e, message.messageHeader, ebWebsocket)
+            logger.trace { "call function ${message.e}" }
+            try {
+                fct(message.e, message.messageHeader, ebWebsocket)
+            } catch (t:Throwable){
+                logger.error(t) { "calling fct of $name failed with exception $t"  }
+            }
             logger.trace { "function was called for $name" }
             return true
         }
@@ -80,7 +85,10 @@ fun <T : Any> translater(
 ) =
     Translater(serializer, context, fct)
 
-interface DataSender : Registerer<DataReceiver> {
+interface DataSender : PlainDataSender, Registerer<DataReceiver> {
+}
+
+fun interface PlainDataSender {
     fun send(message: String)
 }
 
@@ -103,8 +111,6 @@ class EBDataHandler(
     }
 
     var currentTranslaters: () -> List<Translater<out WSEvent>> = { emptyList() }
-
-    data class ResponseTranslater(val list: List<Translater<out WSEvent>>)
 
     private val responseTranslaters = mutableListOf<Translater<out WSEvent>>()
     fun <T : Any> send(serializer: KSerializer<T>, t: T) {
@@ -131,13 +137,18 @@ class EBDataHandler(
     private fun isResponse(messageHeader: EBMessageHeader) = responseTranslaters.any { it.name == messageHeader.body }
 
     private suspend fun run(messageHeader: EBMessageHeader): Boolean {
-        return if (isResponse(messageHeader)) {
-            val response = responseTranslaters.find { it.call(this, messageHeader, onHeader) }!!
-            responseTranslaters.remove(response)
-            true
-        } else {
-            val complete = translaters + currentTranslaters()
-            complete.takeWhile { !it.call(this, messageHeader, onHeader) }.size != complete.size
+        try {
+            return if (isResponse(messageHeader)) {
+                val response = responseTranslaters.find { it.call(this, messageHeader, onHeader) }!!
+                responseTranslaters.remove(response)
+                true
+            } else {
+                val complete = translaters + currentTranslaters()
+                complete.takeWhile { !it.call(this, messageHeader, onHeader) }.size != complete.size
+            }
+        } catch (t: Throwable) {
+            logger.error(t) { "error while trying to read message from backend" }
+            return false
         }
     }
 
