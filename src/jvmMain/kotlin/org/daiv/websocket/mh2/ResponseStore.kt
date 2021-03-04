@@ -1,59 +1,57 @@
 package org.daiv.websocket.mh2
 
 import io.ktor.http.cio.websocket.*
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
-import kotlinx.serialization.modules.EmptySerializersModule
+import mu.KotlinLogging
 import org.daiv.time.isoTime
-import kotlin.coroutines.CoroutineContext
+import java.util.concurrent.CancellationException
 
 actual fun timeId() = System.currentTimeMillis().isoTime()
 
-//class KtorSender(val outgoing: SendChannel<Frame>) : WSSendable {
-//    override suspend fun send(messageHeader: SendSerializable) {
-//        outgoing.send(Frame.Text(messageHeader.serialize()))
-//    }
-//}
-//
-//class KtorWebsocketHandler<MESSAGE:MessageIdable> private constructor(
-//    outgoing: SendChannel<Frame>,
-//    private val scope: CoroutineScope,
-//    private val context: CoroutineContext,
-//    responder: List<WSResponder<MESSAGE>>,
-//    requestResponses: List<RequestResponse<*, *>>,
-//    errorLogger: WSErrorLogger,
-//    sender: KtorSender = KtorSender(outgoing),
-//    store: ResponseStore<MESSAGE> = ResponseStore(scope, context),
-//    private val holder: RequestHolder<MESSAGE> = RequestHolder(
-//        EmptySerializersModule,
-//        sender,
-//        store,
-//        RequestHolderHandler.defaults(store, requestResponses, responder, sender, errorLogger)
-//    ),
-//) : EBSender by holder {
-//    constructor(
-//        outgoing: SendChannel<Frame>,
-//        scope: CoroutineScope,
-//        context: CoroutineContext,
-//        responder: List<WSResponder<MESSAGE>>,
-//        requestResponses: List<RequestResponse<*, *>>,
-//        errorLogger: WSErrorLogger,
-//    ) : this(outgoing, scope, context, responder, requestResponses, errorLogger, KtorSender((outgoing)))
-//
-//    suspend fun run(incoming: ReceiveChannel<Frame>): Job {
-//        return scope.launch(context) {
-//            while (true) {
-//                val ret = incoming.receive()
-//                if (ret is Frame.Text) {
-//                    val text = ret.readText()
-//                    val header = EBMessageHeader2.parse(text)
-//                    holder.onMessage(header)
-//                }
-//            }
-//        }
-//    }
-//}
+class KtorSender(val websocketSession: WebSocketSession) : WSSendable {
+    companion object {
+        private val logger = KotlinLogging.logger { }
+    }
+    override suspend fun send(messageHeader: SendSerializable) {
+        logger.trace { "send $messageHeader" }
+        websocketSession.outgoing.send(Frame.Text(messageHeader.serialize()))
+    }
+}
+
+class DMHKtorWebsocketHandler constructor(
+    val websocketBuilder: DMHWebsocketBuilder<KtorSender>,
+    val onClose: suspend () -> Unit = {}
+) : DMHWebsocketInterface by websocketBuilder {
+    companion object {
+        private val logger = KotlinLogging.logger { }
+    }
+
+    fun listen(): Job {
+        return websocketBuilder.scope.launch(websocketBuilder.coroutineContext) {
+            try {
+                logger.trace { "starting coroutine websocketbuilder $websocketBuilder" }
+                while (true) {
+                    val ret = websocketBuilder.sendable.websocketSession.incoming.receive()
+                    logger.trace { "received: $ret" }
+                    if (ret is Frame.Text) {
+                        val text = ret.readText()
+                        val header = DoubleMessageHeader.parse(text)
+                        logger.trace { "received: $header" }
+                        onMessage(header)
+                    }
+                }
+            } catch (cancellationException: CancellationException) {
+                onClose()
+            } catch (c: ClosedReceiveChannelException){
+                onClose()
+            }catch (t: Throwable) {
+                logger.error(t) { "error in websocketsession" }
+            }
+        }
+    }
+}
+
+
 

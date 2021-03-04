@@ -28,7 +28,7 @@ class ResponseStoreTest {
         val body = ToStore1.serializer().stringify(ToStore1(5))
         val serialName = ToStore1.serializer().descriptor.serialName
         val header = EBMessageHeader2("EMH2", serialName, null, true, "resId1", body)
-        store.storeTranslator({}, {
+        store.storeTranslator({
             channel.send(it.serialize())
         }) {
             store.removeId(it)?.let {

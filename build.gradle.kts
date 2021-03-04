@@ -6,7 +6,7 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.109")
+        classpath("org.daiv.dependency:DependencyHandling:0.0.118")
     }
 }
 
@@ -68,6 +68,8 @@ kotlin {
         }
         val jvmTest by getting {
             dependencies {
+                implementation(versions.ktor("server-netty"))
+                implementation(versions.ktor("client-cio"))
                 implementation(versions.mockk())
                 implementation(kotlin("test-junit"))
             }

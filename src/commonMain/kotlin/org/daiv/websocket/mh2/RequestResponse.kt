@@ -2,6 +2,7 @@ package org.daiv.websocket.mh2
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.SerializersModule
+import mu.KotlinLogging
 import org.daiv.websocket.MessageHeaderInterface
 
 data class EBMessageHeader2Builder(val serialName: String, val json: String)
@@ -17,14 +18,15 @@ interface SimpleRequestResponse<REQUEST : Any, RESPONSE : Any> :
         )
     }
 
+    override fun isMessage(messageData: EBMessageHeader2): Boolean = messageData.body == serializer.serialName()
+
     override val errorBuilderKey: EBMessageHeader2Builder
         get() = EBMessageHeader2Builder(response.descriptor.serialName, "")
 
     suspend fun onMessage(request: REQUEST): RESPONSE
 }
 
-interface RequestResponse<MESSAGE : MessageIdable, MSGBUILDERKEY : Any> {
-    fun isMessage(messageData: MESSAGE): Boolean = !messageData.isResponse && messageData.responseId != null
+interface RequestResponse<MESSAGE : MessageIdable, MSGBUILDERKEY : Any> : MessageChecker<MESSAGE> {
     suspend fun answer(context: SerializersModule, message: MESSAGE): MSGBUILDERKEY
     val errorBuilderKey: MSGBUILDERKEY
 //    suspend fun onMessage(request: REQUEST): RESPONSE
@@ -39,7 +41,7 @@ data class HeaderParser(val rest: String, val list: List<String> = emptyList()) 
     fun takeAll() = HeaderParser(rest = "", list + rest.trim().replaceFirst("json = ", ""))
 
     fun parseNoString(): HeaderParser {
-        val next = rest.split(",")[0]
+        val next = rest.split(",")[0].trim()
         return HeaderParser(rest.dropWhile { it != ',' }, list + next)
     }
 
@@ -105,6 +107,7 @@ data class EBMessageHeader2 constructor(
     override fun serialize() = "[\"$header\", \"$body\", \"$errorMessage\", $isResponse, \"$responseId\", json = $json]"
 
     companion object {
+        private val logger = KotlinLogging.logger("org.daiv.websocket.mh2.EBMessageHeader2")
         private fun String.toNull() = if (this == "null") null else this
 
         fun parse(string: String): EBMessageHeader2 {

@@ -31,24 +31,24 @@ class RequestHolderTest {
         }
     }
 
-    @Test
-    fun test() = runTest {
-        val resChannel = Channel<SendSerializable>()
-        val expect = ResponseSent(9)
-        val handlers = listOf(TestHandler(false), TestHandler(true))
-        val holder = RequestHolder(EmptySerializersModule, object : WSSendable {
-            override suspend fun send(messageHeader: SendSerializable) {
-                resChannel.send(messageHeader)
-            }
-        }, ResponseStore(), handlers)
-        holder.send(Senddata.serializer(), Senddata(6), ResponseSent.serializer()) {
-        }
-        val s = resChannel.receive() as EBMessageHeader2
-        val res = s.answer(expect, ResponseSent.serializer(), true)
-        holder.onMessage(res)
-        assertNull(handlers[0].wasCalled)
-        assertEquals(handlers[1].wasCalled, res)
-    }
+//    @Test
+//    fun test() = runTest {
+//        val resChannel = Channel<SendSerializable>()
+//        val expect = ResponseSent(9)
+//        val handlers = listOf(TestHandler(false), TestHandler(true))
+//        val holder = RequestHolder(EmptySerializersModule, object : WSSendable {
+//            override suspend fun send(messageHeader: SendSerializable) {
+//                resChannel.send(messageHeader)
+//            }
+//        }, ResponseStore(), handlers)
+//        holder.send(Senddata.serializer(), Senddata(6), ResponseSent.serializer()) {
+//        }
+//        val s = resChannel.receive() as EBMessageHeader2
+//        val res = s.answer(expect, ResponseSent.serializer(), true)
+//        holder.onMessage(res)
+//        assertNull(handlers[0].wasCalled)
+//        assertEquals(handlers[1].wasCalled, res)
+//    }
 
 
     val answerable = DefaultWSAnswerable(listOf(object : SimpleRequestResponse<Senddata, ResponseSent> {
@@ -101,7 +101,7 @@ class RequestHolderTest {
         try {
             wsResponseable.doHandle(m, EmptySerializersModule)
             fail("exception should have been thrown")
-        } catch (w: WSResponseAble.WSResponseException){
+        } catch (w: WSResponseAble.WSResponseException) {
 
         }
     }
@@ -115,9 +115,9 @@ class RequestHolderTest {
         var responseSent: EBMessageHeader2? = null
         val storable = DefaultResponseStorable(object : IdGetter<EBMessageHeader2> {
             override suspend fun removeId(responseId: String): ResponseStore.WSResponse<EBMessageHeader2>? {
-                return if (responseId == "testId-1") ResponseStore.WSResponse( {}, {
+                return if (responseId == "testId-1") ResponseStore.WSResponse {
                     responseSent = it
-                }) else null
+                } else null
             }
         })
         val toSent = ResponseSent(5)
@@ -137,9 +137,9 @@ class RequestHolderTest {
         var responseSent: EBMessageHeader2? = null
         val storable = DefaultResponseStorable(object : IdGetter<EBMessageHeader2> {
             override suspend fun removeId(responseId: String): ResponseStore.WSResponse<EBMessageHeader2>? {
-                return if (responseId == "testId-1") ResponseStore.WSResponse( {}, {
+                return if (responseId == "testId-1") ResponseStore.WSResponse {
                     responseSent = it
-                }) else null
+                } else null
             }
         })
         val toSent = ResponseSent(5)
@@ -152,7 +152,7 @@ class RequestHolderTest {
         try {
             storable.doHandle(m, EmptySerializersModule)
             fail("exception should have been thrown")
-        } catch (t:ResponseStorable.ResponseStoreExecption){
+        } catch (t: ResponseStorable.ResponseStoreExecption) {
 
         }
     }
@@ -161,7 +161,7 @@ class RequestHolderTest {
     fun answerableTest() = runTest {
         val serializer = ResponseSent.serializer()
         var responseSent: ResponseSent? = null
-        var sentEBH:SendSerializable? = null
+        var sentEBH: SendSerializable? = null
         val sender = object : WSSendable {
             override suspend fun send(messageHeader: SendSerializable) {
                 sentEBH = messageHeader

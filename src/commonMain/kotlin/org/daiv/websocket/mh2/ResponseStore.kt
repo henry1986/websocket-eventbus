@@ -4,7 +4,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.KSerializer
 import mu.KotlinLogging
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -71,16 +70,14 @@ class ResponseStore<MESSAGE:Any>(
     }
 
     data class WSResponse<MESSAGE : Any>(
-        val onError: (String) -> Unit,
         val response: suspend (MESSAGE) -> Unit
     )
 
     suspend fun storeTranslator(
-        onError: (String) -> Unit,
         response: suspend (MESSAGE) -> Unit,
         callback: suspend (String) -> Unit
     ) {
-        channel.send(TranslatorRequest(WSResponse(onError, response), callback))
+        channel.send(TranslatorRequest(WSResponse(response), callback))
     }
 }
 
