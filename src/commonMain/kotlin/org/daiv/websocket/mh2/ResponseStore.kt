@@ -5,6 +5,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
+import org.daiv.coroutines.ScopeContextable
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
@@ -22,8 +23,7 @@ fun interface IDGenerator {
 }
 
 class ResponseStore<MESSAGE:Any>(
-    val scope: CoroutineScope = GlobalScope,
-    val coroutineContext: CoroutineContext = EmptyCoroutineContext
+    val scopeContextable: ScopeContextable
 ) : IDGenerator, IdGetter <MESSAGE>{
     companion object {
         private val logger = KotlinLogging.logger { }
@@ -40,7 +40,7 @@ class ResponseStore<MESSAGE:Any>(
     data class TranslatorRequest<MESSAGE:Any>(val wsResponse: WSResponse<MESSAGE>, val callback: suspend (String) -> Unit):ResponseStoreEvent<MESSAGE>
     data class Remove<MESSAGE:Any>(val id: String):ResponseStoreEvent<MESSAGE>
 
-    private val job = scope.launch(coroutineContext) {
+    private val job = scopeContextable.launch("responseStore") {
         while (true) {
             val r = channel.receive()
             logger.trace { "received: $r" }
@@ -64,7 +64,7 @@ class ResponseStore<MESSAGE:Any>(
     private suspend fun storeResponseTranslator(translatorRequest: TranslatorRequest<MESSAGE>) {
         val id = getId(timeId())
         map[id] = translatorRequest.wsResponse
-        scope.launch(coroutineContext) {
+        scopeContextable.launch("callback") {
             translatorRequest.callback(id)
         }
     }

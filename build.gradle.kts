@@ -6,7 +6,7 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.118")
+        classpath("org.daiv.dependency:DependencyHandling:0.0.154")
     }
 }
 
@@ -25,8 +25,11 @@ version = versions.setVersion { eventbus }
 
 repositories {
     mavenCentral()
-    maven("https://dl.bintray.com/kotlin/kotlinx")
     maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
+    maven("https://dl.bintray.com/kotlin/kotlinx")
+}
+kotlin.sourceSets.all {
+    languageSettings.useExperimentalAnnotation("kotlin.RequiresOptIn")
 }
 
 kotlin {
@@ -51,6 +54,7 @@ kotlin {
             dependencies {
                 implementation(versions.kutil())
                 implementation(versions.coroutines())
+                implementation(versions.coroutines_lib())
                 implementation(versions.serialization())
             }
         }

@@ -6,6 +6,8 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 import mu.KotlinLogging
+import org.daiv.coroutines.DefaultScopeContextable
+import org.daiv.coroutines.ScopeContextable
 import org.daiv.websocket.Message
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -18,12 +20,12 @@ data class DMHSerializableKey(
     val message: String
 )
 
-object DMHSendSerializable : SendSerializableBuilder<DMHSerializableKey> {
+object DMHMessageFactory : MessageFactory<DoubleMessageHeader, DMHSerializableKey> {
     override fun toMessageHeader(
         msgbuilderkey: DMHSerializableKey,
         isResponse: Boolean,
         responseId: String
-    ): SendSerializable {
+    ): DoubleMessageHeader {
         return DoubleMessageHeader(
             msgbuilderkey.headerSerialName,
             msgbuilderkey.bodySerialName,
@@ -34,12 +36,14 @@ object DMHSendSerializable : SendSerializableBuilder<DMHSerializableKey> {
         )
     }
 
+    override fun parse(message: String) = DoubleMessageHeader.parse(message)
+
     override fun error(
         errorMessage: String,
         msgbuilderkey: DMHSerializableKey,
         isResponse: Boolean,
         responseId: String
-    ): SendSerializable {
+    ): DoubleMessageHeader {
         return DoubleMessageHeader(
             msgbuilderkey.headerSerialName,
             msgbuilderkey.bodySerialName,
@@ -88,7 +92,8 @@ class DMHAnswerOnRequest(
     sendable: WSSendable,
     errorLogger: WSErrorLogger
 ) : AnswerOnRequest<DoubleMessageHeader, DMHSerializableKey>, WSSendable by sendable, WSErrorLogger by errorLogger {
-    override val sendSerializableBuilder: SendSerializableBuilder<DMHSerializableKey> = DMHSendSerializable
+    override val messageFactory: MessageFactory<DoubleMessageHeader, DMHSerializableKey> =
+        DMHMessageFactory
 }
 
 data class DMHRequestHandler<HEADER : Any, T : Any>(
@@ -103,8 +108,8 @@ data class DMHRequestHandler<HEADER : Any, T : Any>(
     }
 }
 
-data class DMHRequestHolder(override val wsResponses: List<WSRequestHandler<DoubleMessageHeader>>) :
-    WSResponseAble<DoubleMessageHeader>
+//data class DMHRequestHolder(override val wsResponses: List<WSRequestHandler<DoubleMessageHeader>>) :
+//    WSResponseAble<DoubleMessageHeader>
 
 interface MessageReceiver2<MESSAGE : MessageIdable> : SerializersModuleable {
     companion object {
@@ -132,13 +137,8 @@ interface SerializersModuleable {
     val context: SerializersModule
 }
 
-class DMHResponseStorable(override val responseStore: IdGetter<DoubleMessageHeader>) :
-    ResponseStorable<DoubleMessageHeader>
-
-interface DMHSender : SerializersModuleable {
-    val responseStore: ResponseStore<DoubleMessageHeader>
-    val sendable: WSSendable
-
+class DMHSender(websocketInterface: WebsocketInterface<DoubleMessageHeader>) :
+    WebsocketInterface<DoubleMessageHeader> by websocketInterface {
 
     suspend fun <HEADER : Any, T : Any, R : Any> send(
         headerSerializer: KSerializer<HEADER>,
@@ -149,7 +149,8 @@ interface DMHSender : SerializersModuleable {
         response: suspend (HEADER, R) -> Unit
     ) {
         responseStore.storeTranslator({
-            val m = Message.serializer(headerSerializer, responseSerializer).parse(context, it.message)
+            val x = Message.serializer(headerSerializer, responseSerializer)
+            val m = x.parse(context, it.message)
             response(m.messageHeader, m.e)
         }) {
             send(headerSerializer, serializer, header, t, it)
@@ -187,25 +188,48 @@ interface DMHSender : SerializersModuleable {
     }
 }
 
+interface Sender<MESSAGE : Any> {
+    val responseStore: ResponseStore<MESSAGE>
+    val sendable: WSSendable
+}
 
-interface DMHWebsocketInterface : MessageReceiver2<DoubleMessageHeader>, DMHSender
 
-class DMHWebsocketBuilder<T : WSSendable>(
-    override val sendable: T,
-    requestResponses: List<RequestResponse<DoubleMessageHeader, DMHSerializableKey>> = emptyList(),
-    requestHandler: List<WSRequestHandler<DoubleMessageHeader>> = emptyList(),
+interface MessageFactory<MESSAGE : SendSerializable, MSGBUILDERKEY : Any> {
+    fun toMessageHeader(msgbuilderkey: MSGBUILDERKEY, isResponse: Boolean, responseId: String): MESSAGE
+
+    fun error(
+        errorMessage: String,
+        msgbuilderkey: MSGBUILDERKEY,
+        isResponse: Boolean,
+        responseId: String
+    ): MESSAGE
+
+    fun parse(message: String): MESSAGE
+}
+
+interface WebsocketInterface<MESSAGE : MessageIdable> : MessageReceiver2<MESSAGE>,
+    Sender<MESSAGE>, ActiveCheck
+
+class WebsocketBuilder<MESSAGE, MSGBUILDERKEY : Any>(
+    override val sendable: WSSendable,
+    val messageFactory: MessageFactory<MESSAGE, MSGBUILDERKEY>,
+    requestResponses: List<RequestResponse<MESSAGE, MSGBUILDERKEY>> = emptyList(),
+    requestHandler: List<WSRequestHandler<MESSAGE>> = emptyList(),
     val errorLogger: WSErrorLogger = WSErrorLogger { },
     override val context: SerializersModule = EmptySerializersModule,
-    val scope: CoroutineScope = GlobalScope,
-    val coroutineContext: CoroutineContext = EmptyCoroutineContext
-) : DMHWebsocketInterface {
-    override val responseStore: ResponseStore<DoubleMessageHeader> = ResponseStore(scope, coroutineContext)
-    override val handlers: List<RequestHolderHandler<DoubleMessageHeader>> = listOf(
-        DMHResponseStorable(responseStore),
-        DMHAnswerOnRequest(requestResponses, sendable, errorLogger),
-        DMHRequestHolder(requestHandler)
+    val scopeContextable: ScopeContextable = DefaultScopeContextable()
+) : WebsocketInterface<MESSAGE>, ActiveCheck by sendable
+        where MESSAGE : MessageIdable,
+              MESSAGE : SendSerializable {
+    override val responseStore: ResponseStore<MESSAGE> = ResponseStore(scopeContextable)
+    override val handlers: List<RequestHolderHandler<MESSAGE>> = listOf(
+        ResponseStorable(responseStore),
+        AWSAnswerable(requestResponses, sendable, errorLogger, messageFactory),
+        WSResponseAble(requestHandler)
     )
 }
+
+//class DMHWebsocketBuilder<T : WSSendable>:WebsocketBuilder<T, DoubleMessageHeader, DMHSendSerializable>()
 
 data class DoubleMessageHeader(
     val header: String,

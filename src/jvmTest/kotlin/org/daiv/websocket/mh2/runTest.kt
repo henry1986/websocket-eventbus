@@ -5,7 +5,6 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.features.websocket.*
 import io.ktor.http.cio.websocket.*
-import io.ktor.http.cio.websocket.WebSockets
 import io.ktor.routing.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -28,10 +27,11 @@ fun main() {
 
         routing {
             webSocket("test") {
-                DMHKtorWebsocketHandler(DMHWebsocketBuilder(KtorSender(this))) {
+                val handler = KtorWebsocketHandler(WebsocketBuilder(KtorSender(this), DMHMessageFactory)) {
                     println("was canceled")
-                }.listen()
-                delay(10L* 1000L)
+                }
+                handler.listen()
+                delay(10L * 1000L)
                 println("hello3")
             }
         }
@@ -43,12 +43,12 @@ fun main() {
         delay(1000L)
         client.webSocket("ws://localhost:$port/test") {
             println("hello1")
-            DMHKtorWebsocketHandler(DMHWebsocketBuilder(KtorSender(this))){
+            KtorWebsocketHandler(WebsocketBuilder(KtorSender(this), DMHMessageFactory)) {
                 println("client was canceled")
-            }.listen().join()
+            }.listen()
             println("hello2")
         }
     }
     server.start()
-
+    println("blubs")
 }

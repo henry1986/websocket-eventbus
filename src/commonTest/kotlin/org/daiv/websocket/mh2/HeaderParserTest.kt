@@ -1,5 +1,6 @@
 package org.daiv.websocket.mh2
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlin.test.Test
@@ -9,6 +10,7 @@ class HeaderParserTest {
     @Serializable
     data class TestData(val x: Int)
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun testTrue() {
         val e = EBMessageHeader2(
@@ -27,6 +29,8 @@ class HeaderParserTest {
         assertEquals(TestData(5), x)
         assertEquals(e, parsed)
     }
+
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun testFalse() {
         val e = EBMessageHeader2(

@@ -2,6 +2,7 @@ package org.daiv.websocket.mh2
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.Serializable
+import org.daiv.coroutines.DefaultScopeContextable
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.fail
@@ -23,7 +24,7 @@ class ResponseStoreTest {
 
     @Test
     fun test() = runTest {
-        val store = ResponseStore<EBMessageHeader2>()
+        val store = ResponseStore<EBMessageHeader2>(DefaultScopeContextable())
         val channel = Channel<String>()
         val body = ToStore1.serializer().stringify(ToStore1(5))
         val serialName = ToStore1.serializer().descriptor.serialName

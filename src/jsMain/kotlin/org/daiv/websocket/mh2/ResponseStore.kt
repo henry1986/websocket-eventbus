@@ -11,49 +11,76 @@ actual fun timeId() = Date().toISOString()
 
 
 class JSSendable(val ws: WebSocket = startWebsocket()) : WSSendable {
+    companion object {
+        private val logger = KotlinLogging.logger("org.daiv.websocket.mh2.JSSendable")
+    }
+
     override suspend fun send(messageHeader: SendSerializable) {
         ws.send(messageHeader.serialize())
     }
-}
+    override suspend fun receive(messageHandler: MessageHandler){
+        ws.onopen = {
+            messageHandler.onOpen(it.toString())
+        }
+        ws.onmessage = {
+            messageHandler.onText(it.data.toString())
+        }
+        ws.onclose ={
+            messageHandler.onClose(it.toString())
+        }
+        ws.onerror ={
+            messageHandler.onError(it.toString())
+        }
+    }
 
-class DMHJSWebsocket(
-    val websocketBuilder: DMHWebsocketBuilder<JSSendable>,
-    val handler:suspend (DMHJSWebsocket) -> Unit
-) : DMHWebsocketInterface by websocketBuilder {
+    override fun isActive() = ws.readyState == WebSocket.OPEN
+}
+typealias DMHJSWebsocket = JSWebsocket<DoubleMessageHeader, DMHSerializableKey>
+
+class JSWebsocket<MESSAGE, MSGBUILDERKEY : Any>(
+    val websocketBuilder: WebsocketBuilder<MESSAGE, MSGBUILDERKEY>,
+    val handler:suspend (JSWebsocket<MESSAGE, MSGBUILDERKEY>) -> Unit
+) : WebsocketInterface<MESSAGE> by websocketBuilder
+where MESSAGE :MessageIdable,
+      MESSAGE:SendSerializable{
     companion object {
         private val logger = KotlinLogging.logger("org.daiv.websocket.mh2.DMHJSWebsocket")
     }
 
-    private val ws
-        get() = websocketBuilder.sendable.ws
-
     init {
-        ws.onopen = {
-            logger.info { "websocket opened: $it" }
-            GlobalScope.launch {
-                handler(this@DMHJSWebsocket)
-            }
-        }
-        ws.onmessage = {
-            websocketBuilder.scope.launch(websocketBuilder.coroutineContext) {
-                val p = try {
-                    DoubleMessageHeader.parse(it.data.toString())
-                } catch (t: Throwable) {
-                    logger.error(t) { "message: ${it.data} could not be parsed" }
-                    return@launch
+        websocketBuilder.scopeContextable.launch("receive") {
+            websocketBuilder.sendable.receive(object : MessageHandler {
+                override fun onOpen(openInfo: String?) {
+                    logger.info { "websocket opened: $openInfo" }
+                    GlobalScope.launch {
+                        handler(this@JSWebsocket)
+                    }
                 }
-                try {
-                    onMessage(p)
-                } catch (t: Throwable) {
-                    logger.error(t) { "message handling of $p failed" }
+
+                override fun onClose(closeInfo: String?) {
+                    logger.info { "websocket closed $closeInfo" }
                 }
-            }
-        }
-        ws.onclose = {
-            logger.info { "websocket closed $it" }
-        }
-        ws.onerror = {
-            websocketBuilder.errorLogger.onError("websocket error: $it")
+
+                override fun onError(errorInfo: String?) {
+                    websocketBuilder.errorLogger.onError("websocket error: $errorInfo")
+                }
+
+                override fun onText(text: String) {
+                    websocketBuilder.scopeContextable.launch("onText $text coroutine") {
+                        val p = try {
+                            websocketBuilder.messageFactory.parse(text)
+                        } catch (t: Throwable) {
+                            logger.error(t) { "message: $text could not be parsed" }
+                            return@launch
+                        }
+                        try {
+                            onMessage(p)
+                        } catch (t: Throwable) {
+                            logger.error(t) { "message handling of $p failed" }
+                        }
+                    }
+                }
+            })
         }
     }
 }

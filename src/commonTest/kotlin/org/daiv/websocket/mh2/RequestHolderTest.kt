@@ -1,10 +1,10 @@
 package org.daiv.websocket.mh2
 
-import kotlinx.coroutines.channels.Channel
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.EmptySerializersModule
-import kotlinx.serialization.modules.SerializersModule
+import org.daiv.coroutines.DefaultScopeContextable
 import kotlin.test.*
 
 class RequestHolderTest {
@@ -15,21 +15,21 @@ class RequestHolderTest {
     @Serializable
     data class ResponseSent(val x: Int)
 
-    fun <T : Any> EBMessageHeader2.answer(answer: T, serializer: KSerializer<T>, isAnswer: Boolean): EBMessageHeader2 {
-        val answerString = serializer.stringify(answer)
-        return EBMessageHeader2(header, serializer.descriptor.serialName, null, isAnswer, responseId, answerString)
-    }
-
-    class TestHandler(val isToHandle: Boolean) : RequestHolderHandler<EBMessageHeader2> {
-        var wasCalled: MessageData? = null
-        override fun handle(ebMessageHeader: EBMessageHeader2): Boolean {
-            return isToHandle
-        }
-
-        override suspend fun doHandle(ebMessageHeader: EBMessageHeader2, context: SerializersModule) {
-            wasCalled = ebMessageHeader
-        }
-    }
+//    fun <T : Any> EBMessageHeader2.answer(answer: T, serializer: KSerializer<T>, isAnswer: Boolean): EBMessageHeader2 {
+//        val answerString = serializer.stringify(answer)
+//        return EBMessageHeader2(header, serializer.descriptor.serialName, null, isAnswer, responseId, answerString)
+//    }
+//
+//    class TestHandler(val isToHandle: Boolean) : RequestHolderHandler<EBMessageHeader2> {
+//        var wasCalled: MessageData? = null
+//        override fun handle(ebMessageHeader: EBMessageHeader2): Boolean {
+//            return isToHandle
+//        }
+//
+//        override suspend fun doHandle(ebMessageHeader: EBMessageHeader2, context: SerializersModule) {
+//            wasCalled = ebMessageHeader
+//        }
+//    }
 
 //    @Test
 //    fun test() = runTest {
@@ -51,7 +51,7 @@ class RequestHolderTest {
 //    }
 
 
-    val answerable = DefaultWSAnswerable(listOf(object : SimpleRequestResponse<Senddata, ResponseSent> {
+    val answerable = EBM2WSAnswerable(listOf(object : SimpleRequestResponse<Senddata, ResponseSent> {
         override val serializer: KSerializer<Senddata> = Senddata.serializer()
         override val response: KSerializer<ResponseSent> = ResponseSent.serializer()
 
@@ -62,16 +62,25 @@ class RequestHolderTest {
         override suspend fun send(messageHeader: SendSerializable) {
 
         }
-    }, WSErrorLogger { })
 
-    val storable = DefaultResponseStorable(ResponseStore())
+        override suspend fun receive(messageHandler: MessageHandler) {
 
+        }
+
+        override fun isActive(): Boolean {
+            TODO("Not yet implemented")
+        }
+    }) { }
+
+    val storable = ResponseStorable(ResponseStore(DefaultScopeContextable()))
+
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun wsResponsableTest() = runTest {
         val serializer = Senddata.serializer()
         val toSent = Senddata(5)
         var sent: Senddata? = null
-        val wsResponseable = DefaultWSResponsable(listOf(SimpleWSResponder(Senddata.serializer()) {
+        val wsResponseable = WSResponseAble(listOf(SimpleWSResponder(Senddata.serializer()) {
             sent = it
         }))
         val m = EBMessageHeader2(
@@ -84,12 +93,12 @@ class RequestHolderTest {
         assertEquals(toSent, sent)
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun wsResponsableErrorTest() = runTest {
         val serializer = Senddata.serializer()
         val toSent = Senddata(5)
-        var sent: Senddata? = null
-        val wsResponseable = DefaultWSResponsable(listOf(SimpleWSResponder(Senddata.serializer()) {
+        val wsResponseable = WSResponseAble(listOf(SimpleWSResponder(Senddata.serializer()) {
             throw RuntimeException("test exception")
         }))
         val m = EBMessageHeader2(
@@ -106,14 +115,15 @@ class RequestHolderTest {
         }
     }
 
-    val wsResponseable = DefaultWSResponsable(listOf(SimpleWSResponder(Senddata.serializer()) {
+    val wsResponseable = WSResponseAble(listOf(SimpleWSResponder(Senddata.serializer()) {
     }))
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun responseStorableTest() = runTest {
         val serializer = ResponseSent.serializer()
         var responseSent: EBMessageHeader2? = null
-        val storable = DefaultResponseStorable(object : IdGetter<EBMessageHeader2> {
+        val storable = ResponseStorable(object : IdGetter<EBMessageHeader2> {
             override suspend fun removeId(responseId: String): ResponseStore.WSResponse<EBMessageHeader2>? {
                 return if (responseId == "testId-1") ResponseStore.WSResponse {
                     responseSent = it
@@ -131,14 +141,13 @@ class RequestHolderTest {
         assertEquals(m, responseSent)
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun responseStorableExceptionTest() = runTest {
         val serializer = ResponseSent.serializer()
-        var responseSent: EBMessageHeader2? = null
-        val storable = DefaultResponseStorable(object : IdGetter<EBMessageHeader2> {
+        val storable = ResponseStorable(object : IdGetter<EBMessageHeader2> {
             override suspend fun removeId(responseId: String): ResponseStore.WSResponse<EBMessageHeader2>? {
                 return if (responseId == "testId-1") ResponseStore.WSResponse {
-                    responseSent = it
                 } else null
             }
         })
@@ -157,24 +166,32 @@ class RequestHolderTest {
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun answerableTest() = runTest {
         val serializer = ResponseSent.serializer()
-        var responseSent: ResponseSent? = null
         var sentEBH: SendSerializable? = null
         val sender = object : WSSendable {
             override suspend fun send(messageHeader: SendSerializable) {
                 sentEBH = messageHeader
             }
+
+            override suspend fun receive(messageHandler: MessageHandler) {
+
+            }
+
+            override fun isActive(): Boolean {
+                TODO("Not yet implemented")
+            }
         }
-        val answerable = DefaultWSAnswerable(listOf(object : SimpleRequestResponse<Senddata, ResponseSent> {
+        val answerable = EBM2WSAnswerable(listOf(object : SimpleRequestResponse<Senddata, ResponseSent> {
             override val serializer: KSerializer<Senddata> = Senddata.serializer()
             override val response: KSerializer<ResponseSent> = ResponseSent.serializer()
 
             override suspend fun onMessage(request: Senddata): ResponseSent {
                 return ResponseSent(request.x + 1)
             }
-        }), sender, WSErrorLogger { })
+        }), sender) { }
         val sendData = Senddata(9)
         val start = EBMessageHeader2(
             "mh2",
