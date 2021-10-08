@@ -215,6 +215,7 @@ class WebsocketBuilder<MESSAGE, MSGBUILDERKEY : Any>(
     val messageFactory: MessageFactory<MESSAGE, MSGBUILDERKEY>,
     requestResponses: List<RequestResponse<MESSAGE, MSGBUILDERKEY>> = emptyList(),
     requestHandler: List<WSRequestHandler<MESSAGE>> = emptyList(),
+    otherHandlers: List<RequestHolderHandler<MESSAGE>> = emptyList(),
     val errorLogger: WSErrorLogger = WSErrorLogger { },
     override val context: SerializersModule = EmptySerializersModule,
     val scopeContextable: ScopeContextable = DefaultScopeContextable()
@@ -226,7 +227,7 @@ class WebsocketBuilder<MESSAGE, MSGBUILDERKEY : Any>(
         ResponseStorable(responseStore),
         AWSAnswerable(requestResponses, sendable, errorLogger, messageFactory),
         WSResponseAble(requestHandler)
-    )
+    ) + otherHandlers
 }
 
 //class DMHWebsocketBuilder<T : WSSendable>:WebsocketBuilder<T, DoubleMessageHeader, DMHSendSerializable>()

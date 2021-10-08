@@ -3,7 +3,7 @@ pluginManagement {
 //        mavenCentral()
 //        jcenter()
         gradlePluginPortal()
-        maven("https://daiv.org/artifactory/gradle-dev-local")
+        maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
 }
 
