@@ -6,13 +6,13 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.0.163")
+        classpath("org.daiv.dependency:DependencyHandling:0.1.13")
     }
 }
 
 plugins {
-    kotlin("multiplatform") version "1.4.10"
-    kotlin("plugin.serialization") version "1.4.10"
+    kotlin("multiplatform") version "1.6.10"
+    kotlin("plugin.serialization") version "1.6.10"
     id("com.jfrog.artifactory") version "4.17.2"
     id("org.daiv.dependency.VersionsPlugin") version "0.1.3"
     `maven-publish`
@@ -26,8 +26,9 @@ version = versions.setVersion { eventbus }
 repositories {
     mavenCentral()
     maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
-    maven("https://dl.bintray.com/kotlin/kotlinx")
+    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/kotlinx-html/maven") }
 }
+
 kotlin.sourceSets.all {
     languageSettings.useExperimentalAnnotation("kotlin.RequiresOptIn")
 }
@@ -56,6 +57,9 @@ kotlin {
                 implementation(versions.coroutines())
                 implementation(versions.coroutines_lib())
                 implementation(versions.serialization())
+                implementation(versions.serialization_json())
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
+
             }
         }
         val commonTest by getting {
