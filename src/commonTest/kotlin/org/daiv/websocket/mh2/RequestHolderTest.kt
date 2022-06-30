@@ -70,7 +70,7 @@ class RequestHolderTest {
         override fun isActive(): Boolean {
             TODO("Not yet implemented")
         }
-    }) { }
+    }) {m,t-> }
 
     val storable = ResponseStorable(ResponseStore(DefaultScopeContextable()))
 
@@ -191,7 +191,7 @@ class RequestHolderTest {
             override suspend fun onMessage(request: Senddata): ResponseSent {
                 return ResponseSent(request.x + 1)
             }
-        }), sender) { }
+        }), sender) {m,t-> }
         val sendData = Senddata(9)
         val start = EBMessageHeader2(
             "mh2",

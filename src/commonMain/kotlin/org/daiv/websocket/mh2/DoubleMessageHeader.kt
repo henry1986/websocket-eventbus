@@ -216,7 +216,7 @@ class WebsocketBuilder<MESSAGE, MSGBUILDERKEY : Any>(
     requestResponses: List<RequestResponse<MESSAGE, MSGBUILDERKEY>> = emptyList(),
     requestHandler: List<WSRequestHandler<MESSAGE>> = emptyList(),
     otherHandlers: List<RequestHolderHandler<MESSAGE>> = emptyList(),
-    val errorLogger: WSErrorLogger = WSErrorLogger { },
+    val errorLogger: WSErrorLogger = WSErrorLogger { m, t -> },
     override val context: SerializersModule = EmptySerializersModule,
     val scopeContextable: ScopeContextable = DefaultScopeContextable()
 ) : WebsocketInterface<MESSAGE>, ActiveCheck by sendable

@@ -62,7 +62,7 @@ where MESSAGE :MessageIdable,
                 }
 
                 override fun onError(errorInfo: String?) {
-                    websocketBuilder.errorLogger.onError("websocket error: $errorInfo")
+                    websocketBuilder.errorLogger.onError("websocket error: $errorInfo", null)
                 }
 
                 override fun onText(text: String) {

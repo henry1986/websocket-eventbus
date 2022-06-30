@@ -46,7 +46,7 @@ interface WSSendable :ActiveCheck{
 
 
 fun interface WSErrorLogger {
-    fun onError(message: String)
+    fun onError(message: String, t:Throwable?)
 }
 
 
@@ -110,13 +110,13 @@ interface AnswerOnRequest<MESSAGE, MSGBUILDERKEY : Any> : WSSendable, WSErrorLog
             } catch (t: Throwable) {
                 val errorMessage = "error thrown when trying to answer -> ${t.message}"
                 logger.error { "error: $errorMessage" }
-                onError(errorMessage)
+                onError(errorMessage, t)
                 send(messageFactory.error(errorMessage, it.errorBuilderKey, true, responseId))
             }
         } ?: run {
             val errorMessage = "did not find a handler for $ebMessageHeader"
             logger.error { errorMessage }
-            onError(errorMessage)
+            onError(errorMessage, null)
         }
     }
 }

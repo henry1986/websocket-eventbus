@@ -6,7 +6,7 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.1.13")
+        classpath("org.daiv.dependency:DependencyHandling:0.1.24")
     }
 }
 
