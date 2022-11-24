@@ -13,9 +13,20 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
 import java.time.Duration
 
 actual fun runTest(block: suspend () -> Unit) = runBlocking { block() }
+
+@Serializable
+class Test1
+
+@Serializable
+class Test2
+
+@Serializable
+class Test3
+
 
 fun main() {
     val port = 5862
@@ -32,6 +43,9 @@ fun main() {
                 val handler = KtorWebsocketHandler(WebsocketBuilder(KtorSender(this), DMHMessageFactory)) {
                     println("was canceled")
                 }
+                val sender = DMHSender(handler)
+                sender.send(Test1.serializer(), Test2.serializer(), Test1(), Test2())
+                println("hello9")
                 handler.listen()
                 delay(10L * 1000L)
                 println("hello3")
@@ -45,12 +59,20 @@ fun main() {
         delay(1000L)
         client.webSocket("ws://localhost:$port/test") {
             println("hello1")
-            KtorWebsocketHandler(WebsocketBuilder(KtorSender(this), DMHMessageFactory)) {
+            KtorWebsocketHandler(
+                WebsocketBuilder(
+                    KtorSender(this),
+                    DMHMessageFactory,
+                    requestHandler = listOf(DMHRequestHandler(Test1.serializer(), Test2.serializer()) { h, t ->
+                        println("received: $t")
+                    })
+                )
+            ) {
                 println("client was canceled")
             }.listen()
             println("hello2")
         }
     }
-    server.start()
+    server.start(true)
     println("blubs")
 }
