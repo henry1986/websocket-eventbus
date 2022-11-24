@@ -2,9 +2,7 @@ package org.daiv.websocket
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import io.ktor.http.cio.websocket.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
+import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext

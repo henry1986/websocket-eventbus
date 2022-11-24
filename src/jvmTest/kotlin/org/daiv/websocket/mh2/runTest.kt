@@ -1,15 +1,14 @@
 package org.daiv.websocket.mh2
 
-import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.features.websocket.*
-import io.ktor.http.cio.websocket.*
-import io.ktor.routing.*
+import io.ktor.client.plugins.websocket.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import io.ktor.websocket.*
-import io.ktor.websocket.WebSockets
+import io.ktor.server.routing.*
+import io.ktor.server.application.*
+import io.ktor.server.websocket.*
+import io.ktor.server.websocket.WebSockets
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -20,11 +19,14 @@ actual fun runTest(block: suspend () -> Unit) = runBlocking { block() }
 
 fun main() {
     val port = 5862
+    // ...
     val server = embeddedServer(Netty, port = port) {
         install(WebSockets) {
-            pingPeriod = Duration.ofMinutes(1)
+            pingPeriod = Duration.ofSeconds(15)
+            timeout = Duration.ofSeconds(15)
+            maxFrameSize = Long.MAX_VALUE
+            masking = false
         }
-
         routing {
             webSocket("test") {
                 val handler = KtorWebsocketHandler(WebsocketBuilder(KtorSender(this), DMHMessageFactory)) {
@@ -38,7 +40,7 @@ fun main() {
     }
     GlobalScope.launch {
         val client = HttpClient(CIO).config {
-            install(io.ktor.client.features.websocket.WebSockets)
+            install(io.ktor.client.plugins.websocket.WebSockets)
         }
         delay(1000L)
         client.webSocket("ws://localhost:$port/test") {

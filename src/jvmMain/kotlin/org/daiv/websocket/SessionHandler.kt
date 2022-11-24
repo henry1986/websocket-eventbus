@@ -1,6 +1,6 @@
 package org.daiv.websocket
 
-import io.ktor.http.cio.websocket.Frame
+import io.ktor.websocket.*
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.launch

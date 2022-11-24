@@ -1,10 +1,8 @@
 package org.daiv.websocket.mh2
 
-import io.ktor.http.cio.websocket.*
-import kotlinx.coroutines.Job
+import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.daiv.coroutines.DefaultScopeContextable
 import org.daiv.coroutines.ScopeContextable

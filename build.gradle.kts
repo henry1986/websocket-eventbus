@@ -6,7 +6,7 @@ buildscript {
         maven("https://artifactory.daiv.org/artifactory/gradle-dev-local")
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.1.25")
+        classpath("org.daiv.dependency:DependencyHandling:0.2.36")
     }
 }
 
@@ -78,6 +78,7 @@ kotlin {
             dependencies {
                 implementation(versions.ktor("server-netty"))
                 implementation(versions.ktor("client-cio"))
+                implementation(versions.ktor("server-websockets"))
                 implementation(versions.mockk())
                 implementation(kotlin("test-junit"))
             }
