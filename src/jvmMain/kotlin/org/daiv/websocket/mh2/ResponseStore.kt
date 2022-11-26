@@ -13,7 +13,10 @@ import java.util.concurrent.CancellationException
 
 actual fun timeId() = System.currentTimeMillis().isoTime()
 
-class KtorSender(val websocketSession: WebSocketSession, val scopeContextable: ScopeContextable = DefaultScopeContextable()) : WSSendable {
+class KtorSender(
+    val websocketSession: WebSocketSession,
+    val scopeContextable: ScopeContextable = DefaultScopeContextable()
+) : WSSendable {
     companion object {
         private val logger = KotlinLogging.logger { }
     }
@@ -23,7 +26,7 @@ class KtorSender(val websocketSession: WebSocketSession, val scopeContextable: S
         websocketSession.outgoing.send(Frame.Text(messageHeader.serialize()))
     }
 
-    override suspend fun receive(messageHandler: MessageHandler){
+    override suspend fun receive(messageHandler: MessageHandler) {
         val launch = scopeContextable.launch("ktor sender receiving") {
             try {
                 while (true) {
@@ -52,9 +55,9 @@ class KtorSender(val websocketSession: WebSocketSession, val scopeContextable: S
 typealias DMHKtorWebsocketHandler = KtorWebsocketHandler<DoubleMessageHeader, DMHSerializableKey>
 
 class KtorWebsocketHandler<MESSAGE, MSGBUILDERKEY : Any> constructor(
-    val websocketBuilder: WebsocketBuilder< MESSAGE, MSGBUILDERKEY>,
+    val websocketBuilder: WebsocketBuilder<MESSAGE, KtorWebsocketHandler<MESSAGE, MSGBUILDERKEY>, MSGBUILDERKEY>,
     val onClose: suspend () -> Unit = {}
-) : WebsocketInterface<MESSAGE> by websocketBuilder
+) : WebsocketInterface<MESSAGE, KtorWebsocketHandler<MESSAGE, MSGBUILDERKEY>> by websocketBuilder
         where MESSAGE : MessageIdable,
               MESSAGE : SendSerializable {
     companion object {
@@ -62,18 +65,18 @@ class KtorWebsocketHandler<MESSAGE, MSGBUILDERKEY : Any> constructor(
     }
 
     suspend fun listen() {
-        websocketBuilder.sendable.receive(object:MessageHandler{
-            override fun onOpen(openInfo:String?) {
+        websocketBuilder.sendable.receive(object : MessageHandler {
+            override fun onOpen(openInfo: String?) {
             }
 
-            override fun onClose(closeInfo:String?) {
+            override fun onClose(closeInfo: String?) {
                 websocketBuilder.scopeContextable.launch("closing") {
                     logger.info { "closing websocket: $closeInfo" }
                     this@KtorWebsocketHandler.onClose()
                 }
             }
 
-            override fun onError(errorInfo:String?) {
+            override fun onError(errorInfo: String?) {
                 websocketBuilder.scopeContextable.launch("error") {
                     logger.error { "error in websocket: $errorInfo" }
                     this@KtorWebsocketHandler.onClose()
@@ -84,7 +87,7 @@ class KtorWebsocketHandler<MESSAGE, MSGBUILDERKEY : Any> constructor(
                 val header = websocketBuilder.messageFactory.parse(text)
                 logger.trace { "received: $header" }
                 websocketBuilder.scopeContextable.launch("got text $text coroutine") {
-                    onMessage(header)
+                    onMessage(this@KtorWebsocketHandler, header)
                 }
             }
         })
