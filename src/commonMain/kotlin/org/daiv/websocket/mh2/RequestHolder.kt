@@ -13,14 +13,14 @@ interface IdGetter<MESSAGE : Any> {
     suspend fun removeId(responseId: String): ResponseStore.WSResponse<MESSAGE>?
 }
 
-class ResponseStorable<MESSAGE : MessageIdable>(val responseStore: IdGetter<MESSAGE>) : RequestHolderHandler<MESSAGE> {
+class ResponseStorable<MESSAGE : MessageIdable, WS:Any>(val responseStore: IdGetter<MESSAGE>) : RequestHolderHandler<MESSAGE, WS> {
     class ResponseStoreExecption(override val message: String) : EventbusException()
 
-    override fun handle(ebMessageHeader: MESSAGE) =
+    override fun handle( ebMessageHeader: MESSAGE) =
         ebMessageHeader.isResponse && ebMessageHeader.responseId != null
 
     @Throws(ResponseStoreExecption::class)
-    override suspend fun doHandle(ebMessageHeader: MESSAGE, context: SerializersModule) {
+    override suspend fun doHandle(ws: WS, ebMessageHeader: MESSAGE, context: SerializersModule) {
         val responseId = ebMessageHeader.responseId!!
         responseStore.removeId(responseId)?.let { ws ->
             ws.response(ebMessageHeader)
@@ -35,20 +35,19 @@ interface MessageHandler {
     fun onText(text: String)
 }
 
-interface ActiveCheck{
-    fun isActive():Boolean
+interface ActiveCheck {
+    fun isActive(): Boolean
 }
 
-interface WSSendable :ActiveCheck{
+interface WSSendable : ActiveCheck {
     suspend fun send(messageHeader: SendSerializable)
     suspend fun receive(messageHandler: MessageHandler)
 }
 
 
 fun interface WSErrorLogger {
-    fun onError(message: String, t:Throwable?)
+    fun onError(message: String, t: Throwable?)
 }
-
 
 class EBM2SendSerializableBuilder : MessageFactory<EBMessageHeader2, EBMessageHeader2Builder> {
     override fun toMessageHeader(
@@ -78,11 +77,10 @@ class EBM2SendSerializableBuilder : MessageFactory<EBMessageHeader2, EBMessageHe
     override fun parse(message: String): EBMessageHeader2 {
         return EBMessageHeader2.parse(message)
     }
-
 }
 
-interface AnswerOnRequest<MESSAGE, MSGBUILDERKEY : Any> : WSSendable, WSErrorLogger,
-    RequestHolderHandler<MESSAGE>
+interface AnswerOnRequest<MESSAGE, WS:Any, MSGBUILDERKEY : Any> : WSSendable, WSErrorLogger,
+    RequestHolderHandler<MESSAGE, WS>
         where MESSAGE : MessageIdable,
               MESSAGE : SendSerializable {
     companion object {
@@ -93,10 +91,10 @@ interface AnswerOnRequest<MESSAGE, MSGBUILDERKEY : Any> : WSSendable, WSErrorLog
 
     val messageFactory: MessageFactory<MESSAGE, MSGBUILDERKEY>
 
-    override fun handle(ebMessageHeader: MESSAGE) =
+    override fun handle( ebMessageHeader: MESSAGE) =
         !ebMessageHeader.isResponse && ebMessageHeader.responseId != null
 
-    override suspend fun doHandle(ebMessageHeader: MESSAGE, context: SerializersModule) {
+    override suspend fun doHandle(ws:WS, ebMessageHeader: MESSAGE, context: SerializersModule) {
         val responseId = ebMessageHeader.responseId!!
         logger.trace { "handling $responseId" }
         list.find { it.isMessage(ebMessageHeader) }?.let {
@@ -122,13 +120,13 @@ interface AnswerOnRequest<MESSAGE, MSGBUILDERKEY : Any> : WSSendable, WSErrorLog
 }
 
 data class SimpleWSResponder<T : Any>(val serializer: KSerializer<T>, val block: suspend (t: T) -> Unit) :
-    WSRequestHandler<EBMessageHeader2> {
+    WSRequestHandler<EBMessageHeader2, Any> {
 
     override fun isMessage(messageData: EBMessageHeader2): Boolean {
         return messageData.body == serializer.descriptor.serialName
     }
 
-    override suspend fun answer(messageData: EBMessageHeader2, context: SerializersModule) {
+    override suspend fun answer(ws:Any, messageData: EBMessageHeader2, context: SerializersModule) {
         block(serializer.parse(context, messageData.json))
     }
 }
@@ -137,22 +135,27 @@ interface MessageChecker<MESSAGE> {
     fun isMessage(messageData: MESSAGE): Boolean
 }
 
-interface WSRequestHandler<MESSAGE : MessageIdable> : MessageChecker<MESSAGE> {
-    suspend fun answer(messageData: MESSAGE, context: SerializersModule)
+interface WSRequestHandler<MESSAGE : MessageIdable, WS:Any> : MessageChecker<MESSAGE> {
+    suspend fun answer(ws: WS, messageData: MESSAGE, context: SerializersModule)
 }
 
-class WSResponseAble<MESSAGE : MessageIdable>(val wsResponses: List<WSRequestHandler<MESSAGE>>) :
-    RequestHolderHandler<MESSAGE> {
+interface WSWebsocketRequestHandler<MESSAGE : MessageIdable, WS : Any> :
+    MessageChecker<MESSAGE> {
+    suspend fun answer(ws: WS, messageData: MESSAGE, context: SerializersModule)
+}
+
+class WSResponseAble<MESSAGE : MessageIdable, WS : Any>(val wsResponses: List<WSRequestHandler<MESSAGE, WS>>) :
+    RequestHolderHandler<MESSAGE, WS> {
 
     class WSResponseException(cause: Throwable?, message: String?) : EventbusException(cause, message)
 
     override fun handle(ebMessageHeader: MESSAGE) = ebMessageHeader.responseId == null
 
     @Throws(WSResponseException::class)
-    override suspend fun doHandle(ebMessageHeader: MESSAGE, context: SerializersModule) {
+    override suspend fun doHandle(ws: WS, ebMessageHeader: MESSAGE, context: SerializersModule) {
         wsResponses.find { it.isMessage(ebMessageHeader) }?.let {
             try {
-                it.answer(ebMessageHeader, context)
+                it.answer(ws, ebMessageHeader, context)
             } catch (t: Throwable) {
                 val msg =
                     "wsResponder: error thrown when trying to execute: $it serializer response: $ebMessageHeader"
@@ -166,27 +169,27 @@ class WSResponseAble<MESSAGE : MessageIdable>(val wsResponses: List<WSRequestHan
 //    override val wsResponses: List<WSRequestHandler<EBMessageHeader2>>,
 //) : WSResponseAble<EBMessageHeader2>
 //
-class AWSAnswerable<MESSAGE, MSGBUILDERKEY : Any>(
+class AWSAnswerable<MESSAGE, WS:Any, MSGBUILDERKEY : Any>(
     override val list: List<RequestResponse<MESSAGE, MSGBUILDERKEY>>,
     private val sendable: WSSendable,
     private val errorLogger: WSErrorLogger,
     override val messageFactory: MessageFactory<MESSAGE, MSGBUILDERKEY>
-) : AnswerOnRequest<MESSAGE, MSGBUILDERKEY>, WSSendable by sendable, WSErrorLogger by errorLogger
+) : AnswerOnRequest<MESSAGE, WS, MSGBUILDERKEY>, WSSendable by sendable, WSErrorLogger by errorLogger
         where MESSAGE : MessageIdable,
               MESSAGE : SendSerializable
 
-class EBM2WSAnswerable(
+class EBM2WSAnswerable <WS:Any>(
     override val list: List<RequestResponse<EBMessageHeader2, EBMessageHeader2Builder>>,
     private val sendable: WSSendable,
     private val errorLogger: WSErrorLogger,
-) : AnswerOnRequest<EBMessageHeader2, EBMessageHeader2Builder>, WSSendable by sendable, WSErrorLogger by errorLogger {
+) : AnswerOnRequest<EBMessageHeader2, WS, EBMessageHeader2Builder>, WSSendable by sendable, WSErrorLogger by errorLogger {
     override val messageFactory: MessageFactory<EBMessageHeader2, EBMessageHeader2Builder> =
         EBM2SendSerializableBuilder()
 }
 
-interface RequestHolderHandler<MESSAGE : Any> {
+interface RequestHolderHandler<MESSAGE : MessageIdable, WS : Any> {
     fun handle(messageData: MESSAGE): Boolean
-    suspend fun doHandle(messageData: MESSAGE, context: SerializersModule)
+    suspend fun doHandle(ws:WS, messageData: MESSAGE, context: SerializersModule)
 }
 
 interface EBSender {

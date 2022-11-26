@@ -38,9 +38,9 @@ class JSSendable(val ws: WebSocket = startWebsocket()) : WSSendable {
 typealias DMHJSWebsocket = JSWebsocket<DoubleMessageHeader, DMHSerializableKey>
 
 class JSWebsocket<MESSAGE, MSGBUILDERKEY : Any>(
-    val websocketBuilder: WebsocketBuilder<MESSAGE, MSGBUILDERKEY>,
+    val websocketBuilder: WebsocketBuilder<MESSAGE, JSWebsocket<MESSAGE, MSGBUILDERKEY>, MSGBUILDERKEY>,
     val handler:suspend (JSWebsocket<MESSAGE, MSGBUILDERKEY>) -> Unit
-) : WebsocketInterface<MESSAGE> by websocketBuilder
+) : WebsocketInterface<MESSAGE, JSWebsocket<MESSAGE, MSGBUILDERKEY>> by websocketBuilder
 where MESSAGE :MessageIdable,
       MESSAGE:SendSerializable{
     companion object {
@@ -74,7 +74,7 @@ where MESSAGE :MessageIdable,
                             return@launch
                         }
                         try {
-                            onMessage(p)
+                            onMessage(this@JSWebsocket, p)
                         } catch (t: Throwable) {
                             logger.error(t) { "message handling of $p failed" }
                         }
