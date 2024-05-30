@@ -6,7 +6,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("org.daiv.dependency:DependencyHandling:0.1.41")
+        classpath("org.daiv.dependency:DependencyHandling:0.1.65")
     }
 }
 
